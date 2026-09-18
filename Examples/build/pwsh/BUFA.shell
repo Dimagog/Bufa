@@ -1,0 +1,8 @@
+# -ExecutionPolicy is a Windows-only concept, ignored on Unix
+exe       = "./pwsh"
+ext       = ".ps1"
+run       = ["-NoProfile", "-NonInteractive", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File", "${script}"]
+shell     = ["-NoProfile", "-NoLogo"]
+postShell = ["-NoProfile", "-NoLogo", "-NoExit", "-Command", ". '${script}'"]   # dot-sourced: state survives
+move      = "mv"
+copy      = "cp"

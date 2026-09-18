@@ -1,0 +1,24 @@
+largeOutput = true
+
+[env]
+PWSH_VER = "7.5.2"
+
+[windows]
+shell = "cmd"
+cmd = 'tar -xf pwsh.zip'
+
+[[windows.deps.ext]]
+url  = "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VER}/PowerShell-${PWSH_VER}-win-x64.zip"
+hash = "Fp4urmdpoevvhmwlctojfgqkxkm4sfv3aoblh4dagc3tqifwhd7ha"
+name = "pwsh.zip"
+large = true
+
+[unix]
+shell = "bash"
+cmd = "tar -xzf pwsh.tgz"
+
+[[unix.deps.ext]]
+url  = "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VER}/powershell-${PWSH_VER}-linux-x64.tar.gz"
+hash = "Fpvtsji2z4mvbwq7bmcej3imiwonhgubwle4e32fvbt6raxed427a"
+name = "pwsh.tgz"
+large = true

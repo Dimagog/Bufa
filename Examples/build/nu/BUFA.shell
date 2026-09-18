@@ -1,0 +1,9 @@
+# -n only (std lib stays; add --no-std-lib for speed)
+exe       = "./nu"
+ext       = ".nu"
+run       = ["-n", "${script}"]
+shell     = ["-n"]
+postShell = ["-n", "-e", "source '${script}'"]
+prompt    = { env = "PROMPT_COMMAND", default = "" }
+move      = "mv"
+copy      = "cp"

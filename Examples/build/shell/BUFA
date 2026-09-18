@@ -1,0 +1,32 @@
+# prefix-dev/shell ships only as a conda package: a zip holding zstd tarballs. Native tar reads both;
+# the pipe keeps the inner tarball out of the output (GNU tar needs zstd on PATH).
+largeOutput = true
+
+[env]
+SHELL_VER = "0.2.0"
+
+[windows]
+shell = "cmd"
+cmd = 'tar -xOf shell.conda pkg-shell-%SHELL_VER%-%SHELL_BUILD%.tar.zst | tar -xf - --strip-components=1 bin/shell.exe'
+
+[windows.env]
+SHELL_BUILD = "ha073cba_0"
+
+[[windows.deps.ext]]
+url  = "https://conda.anaconda.org/conda-forge/win-64/shell-${SHELL_VER}-${SHELL_BUILD}.conda"
+hash = "F5bvfmvvz7h43zpecqqpfy2geivpviyd7inxvpnhn6ymkjzktwq6q"
+name = "shell.conda"
+large = true
+
+[unix]
+shell = "bash"
+cmd = "tar -xOf shell.conda pkg-shell-${SHELL_VER}-${SHELL_BUILD}.tar.zst | tar -xf - --strip-components=1 bin/shell"
+
+[unix.env]
+SHELL_BUILD = "h6c30b3d_0"
+
+[[unix.deps.ext]]
+url  = "https://conda.anaconda.org/conda-forge/linux-64/shell-${SHELL_VER}-${SHELL_BUILD}.conda"
+hash = "Fz5bfduq644u4fa5nqjljmzojbmwjcfzrjddhlhleip3oviepez7q"
+name = "shell.conda"
+large = true

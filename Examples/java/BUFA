@@ -1,0 +1,9 @@
+# A toolchain consumer: /build/jdk's BUFA.env puts javac and java on PATH; no other declaration needed.
+
+cmd = '''
+javac -d classes Hello.java
+java -cp classes Hello | tee { save -f hello.txt }
+'''
+
+[deps]
+bld = ["/build/jdk"]

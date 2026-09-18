@@ -1,0 +1,76 @@
+/* Page chrome plus the github.com rules github-markdown.css lacks. Keep github-markdown.css pristine. */
+
+body {
+  margin: 0;
+  background-color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #0d1117;
+  }
+}
+
+.markdown-body {
+  box-sizing: border-box;
+  min-width: 200px;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 45px;
+}
+
+@media (max-width: 767px) {
+  .markdown-body {
+    padding: 15px;
+  }
+}
+
+/* GitHub emits the permalink as the heading's sibling, not its child */
+.markdown-body .markdown-heading {
+  position: relative;
+}
+
+.markdown-body .markdown-heading .anchor {
+  position: absolute;
+  top: 50%;
+  left: -28px;
+  display: flex;
+  float: none;
+  width: 28px;
+  height: 28px;
+  margin: auto;
+  padding: 0;
+  border-radius: 6px;
+  opacity: 0;
+  justify-content: center;
+  align-items: center;
+  transform: translateY(-50%);
+}
+
+.markdown-body .markdown-heading:hover .anchor,
+.markdown-body .markdown-heading .anchor:focus {
+  opacity: 1;
+}
+
+.markdown-body .markdown-heading .octicon-link {
+  color: var(--fgColor-default);
+  visibility: visible;
+}
+
+/* Deliberate departure from github.com, whose Warning is brown (#9a6700) */
+.markdown-body .markdown-alert.markdown-alert-warning {
+  --warning-fg: #c24e00;
+  --warning-border: #d4580a;
+  border-left-color: var(--warning-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .markdown-body .markdown-alert.markdown-alert-warning {
+    --warning-fg: #f0883e;
+    --warning-border: #db6d28;
+  }
+}
+
+.markdown-body .markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--warning-fg);
+}

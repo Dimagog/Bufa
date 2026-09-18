@@ -1,0 +1,52 @@
+LargeOutput = true
+Deps.CacheDir = true
+
+[Env]
+GO_VER = "go1.27.1"
+
+[[Windows.Deps.Ext]]
+Url = "https://go.dev/dl/${GO_VER}.windows-amd64.zip"
+Hash = "Fd2iii7fwqtfcdiqkeyea7gbolhjodoo7lg4t7qs6ewkzcq24gh3a"
+Name = "go.zip"
+Large = true
+
+[Windows]
+cmd = '''
+tar -xf go.zip --strip-components=1
+if ERRORLEVEL 1 exit /b %ERRORLEVEL%
+
+set GOENV=%CD%\go.env
+bin\go env -w GOTOOLCHAIN=local
+if ERRORLEVEL 1 exit /b %ERRORLEVEL%
+
+echo PATH=${BUFA_BUILD_ROOT}\%BUFA_BUILD_DIR%\bin;${PATH}> BUFA.env
+echo GOCACHE=${BUFA_CACHE_ROOT}\%BUFA_CACHE_DIR%\GoCache>> BUFA.env
+echo GOPATH=${BUFA_CACHE_ROOT}\%BUFA_CACHE_DIR%\GoPath>> BUFA.env
+echo GOMODCACHE=${BUFA_CACHE_ROOT}\%BUFA_CACHE_DIR%\GoModCache>> BUFA.env
+'''
+
+[[Linux.Deps.Ext]]
+Url = "https://go.dev/dl/${GO_VER}.linux-amd64.tar.gz"
+Hash = "Fwyqsgm2j5gbvr54sjbhiz5kszluiote6v2uaubsu5qi7etbk6fja"
+Name = "go.tgz"
+Large = true
+
+[[MacOS.Deps.Ext]]
+Url = "https://go.dev/dl/${GO_VER}.darwin-arm64.tar.gz"
+Hash = "Fijdljmry7cc343n4fncoih4fa6dc4phslsbxdi3i3aoibwupsswq"
+Name = "go.tgz"
+Large = true
+
+[Unix]
+cmd = '''
+set -euo pipefail
+
+tar -xzf go.tgz --strip-components=1
+
+GOENV=$PWD/go.env bin/go env -w GOTOOLCHAIN=local
+
+echo "PATH=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/bin:\${PATH}" > BUFA.env
+echo "GOCACHE=\${BUFA_CACHE_ROOT}/$BUFA_CACHE_DIR/GoCache" >> BUFA.env
+echo "GOPATH=\${BUFA_CACHE_ROOT}/$BUFA_CACHE_DIR/GoPath" >> BUFA.env
+echo "GOMODCACHE=\${BUFA_CACHE_ROOT}/$BUFA_CACHE_DIR/GoModCache" >> BUFA.env
+'''

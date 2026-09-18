@@ -1,0 +1,44 @@
+%%{init: {"themeCSS": ".cluster-label .nodeLabel, .cluster-label span, .cluster-label p { font-size: 26px !important; line-height: 1.1 !important; color: #111827 !important; font-weight: 600 !important; } #Staging .cluster-label, #Publishing .cluster-label { translate: 0 -40px; } #Own rect { height: 115px; }", "themeVariables": {"fontSize": "26px"}, "flowchart": {"subGraphTitleMargin": {"top": 0, "bottom": 14}, "wrappingWidth": 400, "padding": 10, "nodeSpacing": 40, "rankSpacing": 40}} }%%
+%% Pipeline: this .mmd -> mermaidonline.live -> .svg (patched, see below) -> README embeds a 2x .png of it.
+%% The outer group titles are lifted above their frames: mermaid pins a nested cluster 20px below its parent's
+%% top, so at this size "Staging" would sit on "Own Source". Mermaid grows the viewBox to fit the lift.
+%% #Own rect height is pinned: sibling cluster frames sit 6px apart at any nodeSpacing, so the gap to Deps
+%% comes from trimming the slack under Own Source.
+%% Arrowheads are not expressible here — the .svg has markerWidth/Height 8 -> 18.
+flowchart LR
+    subgraph Staging
+        direction TB
+        subgraph Own[Own Source]
+            direction LR
+            RawSrc[Raw Source] --> SrcFilter>Src Filter] --> Src[Source]
+        end
+        subgraph Deps[Dependencies]
+            direction TB
+            SrcDeps["#10240;#10240;#10240;#10240;Source#10240;#10240;#10240;#10240;"]
+            BldDeps["#10240;#10240;#10240;#10240;#10240;Built#10240;#10240;#10240;#10240;#10240;"]
+            ExtDeps["#10240;#10240;#10240;#10240;External#10240;#10240;#10240;#10240;"]
+        end
+    end
+    Src --> Build{{"#10240;<br>#10240;#10240;Build#10240;#10240;<br>#10240;"}}
+    SrcDeps ---> Build
+    BldDeps --> Build
+    ExtDeps --> Build
+    subgraph Publishing
+        direction LR
+        RawOut[Raw Output] --> BldFilter>Bld Filter] --> Out[Output]
+    end
+    Build --> RawOut
+
+    classDef src fill:#dbeafe,stroke:#3b82f6,stroke-width:4px,color:#1e3a8a
+    classDef filter fill:#fef3c7,stroke:#f59e0b,stroke-width:4px,color:#78350f
+    classDef build fill:#dcfce7,stroke:#16a34a,stroke-width:5px,color:#14532d,font-weight:bold,font-size:34px
+    classDef out fill:#ede9fe,stroke:#8b5cf6,stroke-width:4px,color:#4c1d95
+    class RawSrc,Src,SrcDeps,BldDeps,ExtDeps src
+    class SrcFilter,BldFilter filter
+    class Build build
+    class RawOut,Out out
+    style Staging fill:none,stroke:#6b7280,stroke-width:4px
+    style Publishing fill:none,stroke:#6b7280,stroke-width:4px
+    style Own fill:none,stroke:#9ca3af,stroke-width:3px,stroke-dasharray:6 6
+    style Deps fill:none,stroke:#9ca3af,stroke-width:3px,stroke-dasharray:6 6
+    linkStyle default stroke-width:5px,stroke:#4b5563

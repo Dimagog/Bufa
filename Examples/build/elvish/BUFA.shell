@@ -1,0 +1,7 @@
+# A script never reads rc.elv; -norc keeps a session hermetic too. No verbs (Elvish has no mv/cp builtins)
+# and no prompt (edit:prompt is a variable, not an env var).
+exe       = "./elvish"
+ext       = ".elv"
+run       = ["${script}"]
+shell     = ["-norc"]
+postShell = ["-rc", "${script}"]   # the script is the rc file: runs first, then interactive

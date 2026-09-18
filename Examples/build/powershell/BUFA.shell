@@ -1,0 +1,8 @@
+# A bare exe is found on bufa's PATH: this interpreter is an ambient, unkeyed input.
+exe       = "powershell.exe"
+ext       = ".ps1"
+run       = ["-NoProfile", "-NonInteractive", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File", "${script}"]
+shell     = ["-NoProfile", "-NoLogo"]
+postShell = ["-NoProfile", "-NoLogo", "-NoExit", "-Command", ". '${script}'"]
+move      = "mv"
+copy      = "cp"

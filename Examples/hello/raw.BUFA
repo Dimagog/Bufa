@@ -1,0 +1,3 @@
+print "Hello"
+"hello from nu" | save -f hello.txt
+$env.BUFA_BUILD_DIR | save -f dir.txt

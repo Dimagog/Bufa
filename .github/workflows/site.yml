@@ -1,0 +1,51 @@
+name: Site
+
+on:
+  push:
+    branches: [master]
+    paths: &site-paths
+      - README.md
+      - Doc/**
+      - Examples/README.md
+      - Site/**
+      - .github/workflows/site.yml
+  pull_request:
+    paths: *site-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # GitHub renders $GITHUB_SHA server-side; the checkout only feeds the link check and the static files
+      - name: Build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 Site/build.py _site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

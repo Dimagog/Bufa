@@ -1,0 +1,103 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  goos: linux,   goarch: amd64, cgo: 0 }
+          - { os: windows-latest, goos: windows, goarch: amd64, cgo: 0 }
+          # cgo stays on: rjeczalik/notify uses FSEvents only with cgo, else a per-fd kqueue watch
+          - { os: macos-latest,   goos: darwin,  goarch: arm64, cgo: 1 }
+    env:
+      CGO_ENABLED: ${{ matrix.cgo }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build -trimpath -ldflags='-s -w' -o dist/ ./cmd/bufa
+      - name: Smoke test
+        run: ./dist/bufa --version
+      - name: Read version
+        id: ver
+        run: echo "version=$(cat version.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bufa-${{ steps.ver.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    name: test ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag must match version.txt
+        run: test "v$(cat version.txt)" = "$GITHUB_REF_NAME"
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bufa-*
+          path: dist
+      # upload-artifact drops file modes, hence the chmod
+      - name: Package
+        run: |
+          cd dist
+          for d in bufa-*; do
+            case "$d" in
+              *-windows-*) (cd "$d" && zip -q "../$d.zip" bufa.exe) ;;
+              *)           chmod +x "$d/bufa" && tar -czf "$d.tar.gz" -C "$d" bufa ;;
+            esac
+          done
+          sha256sum *.zip *.tar.gz > SHA256SUMS
+      # view-or-create: a release made in the UI (which pushes the tag) just gets its assets
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz dist/SHA256SUMS --clobber

@@ -1,0 +1,8 @@
+# Names its shell directly; the provider dir is the implied dependency.
+shell = "/build/pwsh"
+
+cmd = '''
+echo Hello
+Set-Content -Path hello.txt -Value "hello from pwsh"
+Set-Content -Path dir.txt -Value $env:BUFA_BUILD_DIR
+'''

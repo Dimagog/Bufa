@@ -1,0 +1,8 @@
+cmd = 'go build -trimpath -ldflags="-s -w" ./cmd/bufa'
+
+[Filters]
+Src = ["+*.go", "+/go.{mod,sum}", "+/version.txt"]
+Bld = ["+/bufa{,.exe}"]
+
+[Deps]
+Bld = ["go"]
