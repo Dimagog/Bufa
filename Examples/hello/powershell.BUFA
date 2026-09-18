@@ -1,0 +1,9 @@
+# A definition-only provider invokes OS-installed powershell.exe by bare name (Windows only).
+shell = "powershell"
+
+[windows]
+cmd = '''
+echo Hello
+Set-Content -Path hello.txt -Value "hello from powershell"
+Set-Content -Path dir.txt -Value $env:BUFA_BUILD_DIR
+'''

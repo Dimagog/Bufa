@@ -1,0 +1,24 @@
+largeOutput = true
+
+[env]
+NU_VER = "0.114.1"
+
+[windows]
+shell = "cmd"
+cmd = 'tar -xf nu.zip'
+
+[[windows.deps.ext]]
+url  = "https://github.com/nushell/nushell/releases/download/${NU_VER}/nu-${NU_VER}-x86_64-pc-windows-msvc.zip"
+hash = "F7bulzgat43mki33cwc7djthrbakbakduvx4nagh34tu22hny2eyq"
+name = "nu.zip"
+large = true
+
+[unix]
+shell = "bash"
+cmd = "tar -xzf nu.tgz --strip-components=1"
+
+[[unix.deps.ext]]
+url  = "https://github.com/nushell/nushell/releases/download/${NU_VER}/nu-${NU_VER}-x86_64-unknown-linux-gnu.tar.gz"
+hash = "Ftc6gg4vvqnu3d2z7fnstlrh4aw6qsj7wa6m3k7i23ofrigbq6w4a"
+name = "nu.tgz"
+large = true

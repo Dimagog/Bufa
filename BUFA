@@ -1,0 +1,8 @@
+cmd = "go build ./cmd/bufa"
+
+[Filters]
+Src = ["+*.go", "+/go.{mod,sum}", "+/version.txt"]
+Bld = ["+/bufa{,.exe}"]
+
+[Deps]
+Bld = ["go"]
