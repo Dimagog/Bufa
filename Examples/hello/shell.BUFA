@@ -1,0 +1,8 @@
+# prefix-dev/shell: a bash-like body that runs natively on every platform.
+shell = "shell"
+
+cmd = '''
+echo Hello
+echo "hello from shell" > hello.txt
+echo "$BUFA_BUILD_DIR" > dir.txt
+'''

@@ -1,0 +1,8 @@
+# --norc also for a script: ~/.shellrc must never leak into a build.
+exe       = "./shell"
+ext       = ".sh"
+run       = ["--norc", "${script}"]
+shell     = ["--norc"]
+postShell = ["--norc", "--interact", "${script}"]
+move      = "mv"
+copy      = "cp"

@@ -1,0 +1,13 @@
+# Project-wide default shell: every dir's `cmd` runs under Nushell unless it says otherwise.
+shell = "nu"
+
+# this would work too:
+#shell = "/build/nu"
+
+# optional; alias values must be source-root-absolute paths starting with /
+[shells]
+nu = "/build/nu"
+pwsh = "/build/pwsh"
+powershell = "/build/powershell"
+elvish = "/build/elvish"
+shell = "/build/shell"

@@ -1,0 +1,24 @@
+largeOutput = true
+
+[env]
+ELVISH_VER = "0.21.0"
+
+[windows]
+shell = "cmd"
+cmd = 'tar -xf elvish.zip'
+
+[[windows.deps.ext]]
+url  = "https://dl.elv.sh/windows-amd64/elvish-v${ELVISH_VER}.zip"
+hash = "Flynltenovabhznfas2szrab7usvvd3rn7up264xny3chzegvuaya"
+name = "elvish.zip"
+large = true
+
+[unix]
+shell = "bash"
+cmd = "tar -xzf elvish.tgz"
+
+[[unix.deps.ext]]
+url  = "https://dl.elv.sh/linux-amd64/elvish-v${ELVISH_VER}.tar.gz"
+hash = "F7zi5haxygu5kxci2ipae6fw2tno4nljueqptityidkwllwytc47q"
+name = "elvish.tgz"
+large = true

@@ -1,0 +1,36 @@
+flowchart LR
+    subgraph Staging
+        direction TB
+        subgraph Own[Own Source]
+            direction LR
+            RawSrc[Raw Source] --> SrcFilter>Src Filter] --> Src[Source]
+        end
+        subgraph Deps[Dependencies]
+            direction TB
+            SrcDeps[Source]
+            BldDeps[Built]
+            ExtDeps[External]
+        end
+    end
+    Src --> Build{{"#10240;<br>#10240;#10240;Build#10240;#10240;<br>#10240;"}}
+    SrcDeps ---> Build
+    BldDeps --> Build
+    ExtDeps --> Build
+    subgraph Publishing
+        direction LR
+        RawOut[Raw Output] --> BldFilter>Bld Filter] --> Out[Output]
+    end
+    Build --> RawOut
+
+    classDef src fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef filter fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef build fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d,font-weight:bold,font-size:22px
+    classDef out fill:#ede9fe,stroke:#8b5cf6,color:#4c1d95
+    class RawSrc,Src,SrcDeps,BldDeps,ExtDeps src
+    class SrcFilter,BldFilter filter
+    class Build build
+    class RawOut,Out out
+    style Staging fill:none,stroke:#6b7280,stroke-width:2px
+    style Publishing fill:none,stroke:#6b7280,stroke-width:2px
+    style Own fill:none,stroke:#9ca3af,stroke-dasharray:4 4
+    style Deps fill:none,stroke:#9ca3af,stroke-dasharray:4 4

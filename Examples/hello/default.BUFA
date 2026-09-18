@@ -1,0 +1,6 @@
+# One cross-platform body: the project default (/build/nu) runs it on every platform.
+cmd = '''
+print "Hello"
+"hello from nu" | save -f hello.txt
+$env.BUFA_BUILD_DIR | save -f dir.txt
+'''

@@ -1,0 +1,8 @@
+# Elvish through the catalogue; $E: is its env-var namespace.
+shell = "elvish"
+
+cmd = '''
+put Hello
+echo "hello from elvish" > hello.txt
+echo $E:BUFA_BUILD_DIR > dir.txt
+'''

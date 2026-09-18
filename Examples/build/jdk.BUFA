@@ -1,0 +1,48 @@
+# A virtual dir toolchain provider (build/jdk has no source of its own): a pinned Temurin JDK, unpacked once, linked into
+# every consumer (largeOutput). The script writes BUFA.env, and every dir listing /build/jdk in deps.bld gets
+# JAVA_HOME and a PATH with jdk/bin on it.
+# ${BUFA_BUILD_ROOT} stays a reference (expanded in the consumer); only the relative BUFA_BUILD_DIR is baked in.
+
+largeOutput = true
+
+[env]
+JAVA_VER = "26.0.2"
+JAVA_BUILD = "10"
+
+[windows]
+shell = "cmd"
+cmd = '''
+set JDK=jdk
+
+if not exist %JDK% mkdir %JDK%
+tar -xf jdk.zip -C %JDK% --strip-components=1
+if ERRORLEVEL 1 exit /b %ERRORLEVEL%
+
+echo JAVA_HOME=${BUFA_BUILD_ROOT}\%BUFA_BUILD_DIR%\%JDK%> BUFA.env
+echo PATH=${BUFA_BUILD_ROOT}\%BUFA_BUILD_DIR%\%JDK%\bin;${PATH}>> BUFA.env
+'''
+
+[[windows.deps.ext]]
+url  = "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-${JAVA_VER}%2B${JAVA_BUILD}/OpenJDK26U-jdk_x64_windows_hotspot_${JAVA_VER}_${JAVA_BUILD}.zip"
+hash = "Fx7oshvtmxc4gkyb4qntatgbeuvac2g3umjbzqglncg35mrz7i5ta"
+name = "jdk.zip"
+large = true
+
+[unix]
+shell = "bash"
+cmd = '''
+set -eu
+JDK=jdk
+
+mkdir -p $JDK
+tar -xzf jdk.tgz -C $JDK --strip-components=1
+
+echo "JAVA_HOME=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/$JDK" > BUFA.env
+echo "PATH=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/$JDK/bin:\${PATH}" >> BUFA.env
+'''
+
+[[unix.deps.ext]]
+url  = "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-${JAVA_VER}%2B${JAVA_BUILD}/OpenJDK26U-jdk_x64_linux_hotspot_${JAVA_VER}_${JAVA_BUILD}.tar.gz"
+hash = "Fwkfyf5cvptsvfqdfx4x7fcetc2byzcny7wzodluimlaphy4ugs5a"
+name = "jdk.tgz"
+large = true

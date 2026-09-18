@@ -1,0 +1,7 @@
+; nothing at the root
+-/*
+# no .files/dirs at the root
+-/.**
+-/tests/
+# no python cache dirs anywhere
+-__pycache__/
