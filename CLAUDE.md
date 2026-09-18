@@ -243,6 +243,12 @@ Everything else goes. Explicitly:
   `daemon-client`, `hash-files`, `filter-files`, the test-only `test-shell` interpreter and why it exits with an
   int); `cmd/bufa` is the one user-visible binary and has [its own file](cmd/bufa/CLAUDE.md).
 
+- [Site](Site/CLAUDE.md) — the https://bufa.build pipeline (not a Go package): why the pages stay at
+  `README.md`/`Doc/`/`Examples/README.md` and `Site/` is machinery only, GitHub's contents-API HTML as the renderer
+  (and why `POST /markdown` is not equivalent; pushed-commits-only), `build.py`'s id/camo/link rewrites and the
+  link check that fails the build, the pristine vendored `github-markdown.css` vs `site.css`, `CNAME`'s place, and
+  the `site.yml` workflow-mode Pages deploy.
+
 ## Build & Test
 
 ```shell
