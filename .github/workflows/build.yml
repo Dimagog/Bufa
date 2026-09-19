@@ -76,6 +76,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Tag must match version.txt
         run: test "v$(cat version.txt)" = "$GITHUB_REF_NAME"
       - uses: actions/download-artifact@v8
@@ -98,6 +100,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
-            gh release create "$GITHUB_REF_NAME" --generate-notes
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            previous_tag=$(gh release list --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName // empty')
+            range="$GITHUB_REF_NAME"
+            if [ -n "$previous_tag" ]; then
+              range="$previous_tag..$GITHUB_REF_NAME"
+            fi
+            git log --reverse --topo-order -z --format='%B' "$range" -- |
+              awk -v RS='\0' -F '\n' '{ print "* " $1 }' > release-notes.md
+            gh release create "$GITHUB_REF_NAME" --notes-file release-notes.md
+          fi
           gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz dist/SHA256SUMS --clobber
