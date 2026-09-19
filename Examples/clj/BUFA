@@ -1,0 +1,7 @@
+# A consumer of two toolchains: /build/clj's BUFA.env puts clj on PATH, /build/java's the java it runs on.
+# The first build fetches Clojure itself from Maven Central into /build/clj's persistent cache dir.
+
+cmd = 'clj -M hello.clj | tee { save -f hello.txt }'
+
+[deps]
+bld = ["/build/clj", "/build/java"]

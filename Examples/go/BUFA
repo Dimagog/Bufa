@@ -1,0 +1,9 @@
+# A toolchain consumer: /build/go's BUFA.env puts go on PATH and points it at shared caches; nothing else to declare.
+
+cmd = '''
+go build -o bin/ .
+bin/hello | tee { save -f hello.txt }
+'''
+
+[deps]
+bld = ["/build/go"]

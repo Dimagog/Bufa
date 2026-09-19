@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -eu
+
 build() {
   echo
   if ! bufa "$@"; then
@@ -12,8 +14,16 @@ for cfg in hello/*.BUFA; do
   unit=$(basename "$cfg" .BUFA)
   # hello/powershell has a [windows] cmd only
   if [ "$unit" != powershell ]; then
-    build "/hello/$unit" "$@"
+    build "hello/$unit" "$@"
   fi
 done
 
-build /java "$@"
+# rust links with the machine's own linker, which CI (it sets the variable) has and a user may not
+dirs="java go clj"
+if [ -n "${BUFA_TEST_EXAMPLES_REQUIRED:-}" ]; then
+  dirs="$dirs rust"
+fi
+
+for dir in $dirs; do
+  build "$dir" "$@"
+done

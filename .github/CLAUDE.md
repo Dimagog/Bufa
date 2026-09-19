@@ -10,9 +10,9 @@ Releases already created in the UI keep their notes and only receive assets.
 
 `examples` (ubuntu/windows/macos) builds bufa, runs `Examples/buildall.sh` (`buildall.cmd` on Windows), then
 `go test ./Build -run '^TestExamples_'`, which no longer skips because `buildall` filled the Global Artifact Cache —
-and cannot: that step sets `BUFA_TEST_EXAMPLES_REQUIRED`, which fails every skip but a unit with no command on the
-platform (`hello/powershell` off Windows). The variable, not `$CI`, is the switch: the `test` job runs on CI too, with
-a cold cache and no network, and must keep skipping.
+and cannot: the job sets `BUFA_TEST_EXAMPLES_REQUIRED`, which fails every skip but a unit with no command on the
+platform (`hello/powershell` off Windows), and makes `buildall` and the test include `rust/`. The variable, not
+`$CI`, is the switch: the `test` job runs on CI too, with a cold cache and no network, and must keep skipping.
 It is the only pipeline that executes the platform sections of the Examples' configs — a new pin or a `[macos]`
 edit is unverified until it runs.
 
@@ -28,6 +28,10 @@ edit is unverified until it runs.
   platform sections, so a tag must not publish past a break there. It is also the only job depending on third-party
   hosts — on a cache miss (pin change, or GitHub's 7-day eviction) an upstream outage fails it; re-run the failed job
   and `release` proceeds, no re-tag needed.
+* `clj/` reaches a host no pin covers: Clojure itself comes from Maven Central into `build/clj`'s cache dir, which
+  `actions/cache` does not hold — so every run fetches it twice (`buildall`, then the test's scratch store).
 * No tool-install steps: every example is hermetic on the runners' stock images (`build/shell` pins its own
-  unpacker on Unix), and a new ambient requirement should be fixed in the example, not papered over here.
+  unpacker on Unix), and a new ambient requirement should be fixed in the example, not papered over here. The one
+  deliberate exception is `rust/`, which links with the image's own linker (VS Build Tools, gcc, Xcode CLT). A
+  user's machine may have none, so `buildall` and the test take it only under `BUFA_TEST_EXAMPLES_REQUIRED`.
 * `buildall.sh` runs as `bash buildall.sh`, so it needs no exec bit in the repo.

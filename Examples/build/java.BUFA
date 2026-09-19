@@ -1,5 +1,5 @@
-# A virtual dir toolchain provider (build/jdk has no source of its own): a pinned Temurin JDK, unpacked once, linked into
-# every consumer (largeOutput). The script writes BUFA.env, and every dir listing /build/jdk in deps.bld gets
+# A virtual dir toolchain provider (build/java has no source of its own): a pinned Temurin JDK, unpacked once, linked
+# into every consumer (largeOutput). The script writes BUFA.env, and every dir listing /build/java in deps.bld gets
 # JAVA_HOME and a PATH with jdk/bin on it.
 # ${BUFA_BUILD_ROOT} stays a reference (expanded in the consumer); only the relative BUFA_BUILD_DIR is baked in.
 

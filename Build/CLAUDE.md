@@ -243,11 +243,19 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   (pinned archive as a non-exported `large` ext — one per platform under `[[windows|linux|macos.deps.ext]]`, Linux
   and macOS sharing the `[unix]` script and differing only through `[linux.env]`/`[macos.env]` values — unpacked
   under the native shell, `largeOutput`), the ambient
-  `build/powershell`, the `build/jdk.BUFA` toolchain provider (virtual; publishes a `BUFA.env` with `JAVA_HOME` +
-  `PATH`) consumed by `java/`, and virtual consumers under `hello/`. `Examples_test.go` builds them against a scratch
-  store, **skip-if-absent** (pinned artifact cached, ambient exe on PATH, platform command present) — so plain
+  `build/powershell`, the toolchain providers `build/java.BUFA`, `build/go.BUFA`, `build/clj/` (a real dir), and
+  `build/rust.BUFA` — each publishes a `BUFA.env`; tool-specific settings are explained in the file's own comments
+  — consumed by `java/`, `go/` (a nested Go module, so the repo's `./...` never sees it), `clj/` (with
+  `/build/java` too), and `rust/`, and virtual consumers under `hello/`. `rust/` is **not hermetic** — rustc links
+  with the ambient `link.exe`/`cc` — and so **CI only**: `buildall` builds it and its test runs only when
+  `$BUFA_TEST_EXAMPLES_REQUIRED` is set.
+  `Examples_test.go` builds them against a scratch
+  store, **skip-if-absent** (pinned artifact cached — the unit's and each bld dep's —, ambient exe on PATH, platform
+  command present) — so plain
   `go test` never touches the network, and CI's `examples` job is what un-skips it (it runs `buildall` first, which
-  fills the cache). That job sets `$BUFA_TEST_EXAMPLES_REQUIRED`: `failIfSkipped` then fails any skip from a
+  fills the cache). The one exception is `clj`, once its pins are cached: its cache dir (`~/.m2`) is always cold in
+  a scratch store, so each run fetches Clojure from Maven Central — and fails offline. That job sets
+  `$BUFA_TEST_EXAMPLES_REQUIRED`: `failIfSkipped` then fails any skip from a
   `t.Cleanup` (so a helper's own `t.Skip`, e.g. `skipIfNoSymlinks`, is caught too), except the one taken **before**
   it is armed — a unit with no command on this platform. Other tests use
   `cmd/test-shell` (built once per test binary in `Shell_test.go`'s `TestMain`) and a wrapper provider whose

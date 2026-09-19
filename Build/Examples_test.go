@@ -19,6 +19,7 @@ import (
 
 // The repo's Examples/ project, built against a scratch store — what Examples/buildall.cmd enumerates. No network
 // in tests: archive-backed dirs require a cache hit; ambient providers require their bare executable on bufa's PATH.
+// The one exception is clj, once its pins are cached: its Maven repo lives in the store, so a scratch one refetches.
 type examplesProject struct {
 	b        *Builder
 	src, bld string
@@ -125,19 +126,33 @@ func TestExamples_HelloUnits(t *testing.T) {
 	}
 }
 
-// java/ gets javac and java from /build/jdk's published BUFA.env alone.
-func TestExamples_Java(t *testing.T) {
+// Each consumer gets its tools from its bld deps' published BUFA.env files alone.
+func TestExamples_Toolchains(t *testing.T) {
 	p := openExamples(t)
-	reason := p.shellProviderUnavailable(p.shellProviderOf("java"), "java")
-	if reason == "" {
-		reason = p.unavailable(filepath.Join("build", "jdk"), "java")
-	}
-	if reason != "" {
-		t.Skip(reason)
-	}
+	for _, unit := range []string{"java", "go", "clj", "rust"} {
+		t.Run(unit, func(t *testing.T) {
+			failIfSkipped(t)
+			reason := ""
+			// rust links with an ambient linker a dev machine may lack.
+			if unit == "rust" && os.Getenv(examplesRequiredEnv) == "" {
+				reason = "rust is built by CI's examples job only"
+			}
+			if reason == "" {
+				reason = p.shellProviderUnavailable(p.shellProviderOf(unit), unit)
+			}
+			for _, dep := range p.b.getBuildConfig(unit).Deps.Bld {
+				if reason == "" {
+					reason = p.unavailable(dep, unit)
+				}
+			}
+			if reason != "" {
+				t.Skip(reason)
+			}
 
-	hello := p.output(p.b.Build("java"), "hello.txt")
-	if !strings.HasPrefix(hello, "hello from java ") {
-		t.Errorf("hello.txt = %q, want 'hello from java <version>'", hello)
+			hello := p.output(p.b.Build(unit), "hello.txt")
+			if !strings.HasPrefix(hello, "hello from "+unit+" ") {
+				t.Errorf("hello.txt = %q, want 'hello from %s <version>'", hello, unit)
+			}
+		})
 	}
 }

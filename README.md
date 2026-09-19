@@ -6,12 +6,20 @@ Bufa distills a build system down to its main function:
 
 > **if it hasn't changed, don't rebuild it**
 
-.. using hashing and caching, and tries to minimize the rest as much as possible.
+It's hashing + caching all the way down, with everything else kept to a minimum. What you get is:
 
-At its core, Bufa does only three things: **Hashing**, **Caching**, and **Staging**. It hashes your sources,
-caches every build output under the hash of everything that went into it, and stages sources and cached
-dependencies into a clean sandbox where your script runs. No dependency graph DSL, no Starlark, no JVM warming up in
-the background. Just one executable and a `BUFA` file per directory, holding a script and a few lines of TOML.
+* **Instant hot rebuilds:** **ZERO** disk touches when nothing changed (not even reads).
+* **Simple:** one executable, no DSL to learn, no Starlark, [you pick your shell](#3-your-choice-of-scripting-language).
+  A build file is your script plus a few lines of TOML.
+* **Shells and Toolchains as dependencies:** pinned, hash-verified downloads, so the whole team builds with the
+  same tools.
+* **Gradual adoption:** [start quick and dirty](#2-you-can-be-dirty), tighten up to sandboxed, reproducible builds
+  as the project matures.
+
+The simplicity is deliberate. At its core, Bufa does only three things: **Hashing**, **Caching**, and **Staging**.
+It hashes your sources, caches every build output under the hash of everything that went into it, and stages sources
+and cached dependencies into a clean sandbox where your script runs. That is the whole model: one `BUFA` file per
+directory, and nothing else to learn.
 
 An explicit design goal is **ZERO** filesystem accesses on a hot rebuild. Build once, build again, and the second
 run never touches the filesystem — **not a single file, not even for reads**. A background watcher keeps the
@@ -154,6 +162,11 @@ go install github.com/dimagog/bufa/cmd/bufa@latest
 > there and keeps answering "Already built".
 >
 > If a tree must live on a drvfs (Windows drives), build it with `--no-daemon` or ['$BUFA_NO_DAEMON'](Doc/Reference.md#read-by-bufa) set.
+
+> [!IMPORTANT]
+> Hermetic shells and toolchains are big (hundreds of MBs each), and on their first build hashing may seem very slow. It
+> isn't: Bufa hashing is blazingly fast, it is the Windows Antivirus slowing down every disk read for new files. It's
+> recommended to add your `<project>.BUFA` directory to the Antivirus exclusions list for a dramatic speed-up.
 
 ## Quick start
 
@@ -585,8 +598,18 @@ PATH=${GOROOT}/bin;${PATH}
 
 Direct dependents only, and the file is part of the output, so editing it rebuilds every consumer.
 
-[Examples](Examples/README.md) has a runnable one: `build/jdk` unpacks a pinned Temurin JDK and publishes `JAVA_HOME`
-and `PATH`; `java/` compiles and runs a class with nothing but `deps.bld = ["/build/jdk"]`.
+[Examples](Examples/README.md) has runnable ones, each consumed with nothing but a `deps.bld` line:
+
+* **Java**: `build/java` unpacks a pinned Temurin JDK and publishes `JAVA_HOME` and `PATH`; `java/` compiles and runs a class.
+* **Clojure**: `build/clj` does the same for the Clojure CLI — a real dir, not a [virtual](#virtual-dirs) one like the
+  others, since it has a source file of its own; `clj/` runs a script with it. The CLI needs Java, so `clj/` lists
+  `build/java` too: a `BUFA.env` reaches direct dependents only.
+* **Go**: `build/go` does the same for a Go distribution, and points Go's caches at a persistent [cache
+  dir](Doc/Reference.md#depscachedir) shared by every consumer; `go/` builds and runs a module.
+* **Rust**: `build/rust` merges three pinned archives (`rustc`, `cargo`, `rust-std`) into one toolchain, with
+  `CARGO_HOME` in its cache dir; `rust/` builds and runs a crate, and a `filters.bld` rule publishes the binary
+  without the rest of cargo's `target/`. Linking uses the platform's own linker, the one thing not pinned.
+
 
 ## The Next Level of Detail
 

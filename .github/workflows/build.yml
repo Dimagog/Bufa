@@ -77,6 +77,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+    # buildall adds rust (it links with the machine's own linker, which a user may lack); TestExamples_* fail any skip
+    env:
+      BUFA_TEST_EXAMPLES_REQUIRED: 1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -105,10 +108,8 @@ jobs:
         working-directory: Examples
         shell: cmd
         run: call buildall.cmd
-      # The archives are cached now, so TestExamples_* check what each unit wrote; the variable fails any that still skips
+      # The archives are cached now, so TestExamples_* check what each unit wrote
       - name: Verify outputs
-        env:
-          BUFA_TEST_EXAMPLES_REQUIRED: 1
         run: go test ./Build -run '^TestExamples_' -v
       - name: Stop daemon
         if: always()

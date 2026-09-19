@@ -1,0 +1,85 @@
+# A toolchain provider like build/go: the Clojure CLI as deps.clj (a drop-in `clj`) plus the official tools jars,
+# linked into every consumer (largeOutput). Windows gets the native binary; deps.clj ships none for macOS arm64, so
+# Unix runs the platform-neutral jar behind the `clj` launcher — this dir's one source file, which is why it is a
+# real dir and not a virtual one. Either needs `java` on PATH: consumers list /build/java next to /build/clj.
+# BUFA.env aims clj at the unpacked tools and a config dir published here, the JVM's user.home (so ~/.m2) at this
+# dir's persistent cache dir (deps.cacheDir), and the classpath cache at the build's temp dir. It pins the tools
+# version too: a dirty build inherits the machine's env, and a stray DEPS_CLJ_TOOLS_VERSION would make clj download
+# that version into the tools dir.
+# The config dir is complete on purpose: clj creates a missing deps.edn or tools/tools.edn on first run, and here
+# that write would go through the consumer's link into the store.
+
+largeOutput = true
+deps.cacheDir = true
+
+[env]
+CLJ_VER = "1.12.6.1673"
+
+[[deps.ext]]
+url  = "https://github.com/clojure/brew-install/releases/download/${CLJ_VER}/clojure-tools-${CLJ_VER}.tar.gz"
+hash = "Fboz42rds7ip23kk55c76kjwp4mww73mpme6qpxzbvjdcycnrnquq"
+name = "clojure-tools.tgz"
+large = true
+
+[windows]
+shell = "cmd"
+cmd = '''
+tar -xf deps.zip
+if ERRORLEVEL 1 exit /b %ERRORLEVEL%
+
+move /y deps.exe clj.exe
+if ERRORLEVEL 1 exit /b %ERRORLEVEL%
+
+tar -xzf clojure-tools.tgz
+if ERRORLEVEL 1 exit /b %ERRORLEVEL%
+
+mkdir config\tools
+echo {}> config\deps.edn
+copy clojure-tools\tools.edn config\tools\tools.edn
+if ERRORLEVEL 1 exit /b %ERRORLEVEL%
+
+echo PATH=${BUFA_BUILD_ROOT}\%BUFA_BUILD_DIR%;${PATH}> BUFA.env
+echo DEPS_CLJ_TOOLS_DIR=${BUFA_BUILD_ROOT}\%BUFA_BUILD_DIR%\clojure-tools>> BUFA.env
+echo DEPS_CLJ_TOOLS_VERSION=%CLJ_VER%>> BUFA.env
+echo CLJ_CONFIG=${BUFA_BUILD_ROOT}\%BUFA_BUILD_DIR%\config>> BUFA.env
+echo CLJ_CACHE=${TEMP}\.cljcache>> BUFA.env
+echo JDK_JAVA_OPTIONS=-Duser.home=${BUFA_CACHE_ROOT}\%BUFA_CACHE_DIR%\home>> BUFA.env
+'''
+
+[[windows.deps.ext]]
+url  = "https://github.com/borkdude/deps.clj/releases/download/v${CLJ_VER}/deps.clj-${CLJ_VER}-windows-amd64.zip"
+hash = "Fjkbc7btxcxqcyheaavyr2rfjwm2mzdx4dzsvpuex5zsevpczdiya"
+name = "deps.zip"
+large = true
+
+# The Unix launcher: next to clj.exe it would only be a second `clj`.
+[windows.filters]
+src = ["-/clj"]
+
+[unix]
+shell = "bash"
+cmd = '''
+set -eu
+tar -xzf clojure-tools.tgz
+
+# A commit made on Windows carries no exec bit.
+chmod +x clj
+
+mkdir -p config/tools
+echo '{}' > config/deps.edn
+cp clojure-tools/tools.edn config/tools/tools.edn
+
+echo "PATH=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR:\${PATH}" > BUFA.env
+echo "DEPS_CLJ_TOOLS_DIR=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/clojure-tools" >> BUFA.env
+echo "DEPS_CLJ_TOOLS_VERSION=$CLJ_VER" >> BUFA.env
+echo "CLJ_CONFIG=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/config" >> BUFA.env
+echo "CLJ_CACHE=\${TMPDIR}/.cljcache" >> BUFA.env
+echo "JDK_JAVA_OPTIONS=-Duser.home=\${BUFA_CACHE_ROOT}/$BUFA_CACHE_DIR/home" >> BUFA.env
+'''
+
+# Published with the output (export), not pruned like an unpacked archive: the jar is the tool.
+[[unix.deps.ext]]
+url  = "https://github.com/borkdude/deps.clj/releases/download/v${CLJ_VER}/deps.clj-${CLJ_VER}-standalone.jar"
+hash = "Foqz5lnpushkbcte6uv2lzzscoxj3lwpwhwdfavkq3tivlihrtu7q"
+name = "deps.jar"
+export = true

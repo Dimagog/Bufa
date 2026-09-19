@@ -17,5 +17,10 @@ def --wrapped main [...args: string] {
       build $"/hello/($unit)" ...$args
     }
   }
-  build /java ...$args
+  # rust links with the machine's own linker, which CI (it sets the variable) has and a user may not
+  let in_ci = ($env.BUFA_TEST_EXAMPLES_REQUIRED? | default "") != ""
+  let dirs = [java go clj] ++ (if $in_ci { [rust] } else { [] })
+  for dir in $dirs {
+    build $"/($dir)" ...$args
+  }
 }

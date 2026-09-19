@@ -1,0 +1,4 @@
+# rustc's MSVC link step is the one non-deterministic part of the build: /Brepro makes the linker's timestamps and
+# the embedded PDB identifier deterministic.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "link-arg=/Brepro"]

@@ -1,0 +1,17 @@
+# A toolchain consumer: /build/rust's BUFA.env puts cargo and rustc on PATH and points CARGO_HOME at a shared cache.
+# filters.bld publishes the binary alone out of cargo's target/ tree.
+# filters.src brings in .cargo/ (dot entries are left out by default): its config makes the MSVC link reproducible.
+# The list must open with a `-` rule: a leading `+` would drop the implicit `+**`, and Cargo.toml with it.
+# Needs the platform's own linker installed, so buildall leaves it out unless BUFA_TEST_EXAMPLES_REQUIRED is set (CI).
+
+cmd = '''
+cargo build --release --locked
+target/release/hello | tee { save -f hello.txt }
+'''
+
+[deps]
+bld = ["/build/rust"]
+
+[filters]
+src = ["-/target/", "+/.cargo/"]
+bld = ["+/hello.txt", "+/target/release/hello{,.exe}"]

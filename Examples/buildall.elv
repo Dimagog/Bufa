@@ -20,4 +20,12 @@ for cfg [hello/*.BUFA] {
   }
 }
 
-build /java $@args
+# rust links with the machine's own linker, which CI (it sets the variable) has and a user may not
+var dirs = [java go clj]
+if (has-env BUFA_TEST_EXAMPLES_REQUIRED) {
+  set dirs = (conj $dirs rust)
+}
+
+for dir $dirs {
+  build /$dir $@args
+}

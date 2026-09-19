@@ -1,0 +1,96 @@
+# A virtual dir toolchain provider like build/go: pinned Rust standalone components — rustc, cargo, and the host's
+# rust-std — unpacked once into one prefix, linked into every consumer (largeOutput). Every archive is laid out as
+# <package>/<component>/{bin,lib,…}, so --strip-components=2 merges them with no installer run.
+# The script writes BUFA.env, and every dir listing /build/rust in deps.bld gets a PATH with cargo and rustc on it and
+# a CARGO_HOME (registry index, downloaded crates) inside this dir's persistent cache dir (deps.cacheDir).
+# ${BUFA_BUILD_ROOT} and ${BUFA_CACHE_ROOT} stay references (expanded in the consumer); only the relative
+# BUFA_BUILD_DIR and BUFA_CACHE_DIR are baked in.
+# The one ambient requirement: rustc links with the platform's own linker — Visual Studio Build Tools' link.exe on
+# Windows (found through the registry), cc on Linux and macOS.
+
+largeOutput = true
+deps.cacheDir = true
+
+[env]
+RUST_VER = "1.98.1"
+RUST_DIST = "https://static.rust-lang.org/dist"
+
+[windows]
+shell = "cmd"
+cmd = '''
+for %%c in (rustc cargo rust-std) do (
+  tar -xf %%c.tgz --strip-components=2
+  if ERRORLEVEL 1 exit /b 1
+)
+del manifest.in
+
+echo PATH=${BUFA_BUILD_ROOT}\%BUFA_BUILD_DIR%\bin;${PATH}> BUFA.env
+echo CARGO_HOME=${BUFA_CACHE_ROOT}\%BUFA_CACHE_DIR%\CargoHome>> BUFA.env
+'''
+
+[[windows.deps.ext]]
+url  = "${RUST_DIST}/rustc-${RUST_VER}-x86_64-pc-windows-msvc.tar.gz"
+hash = "Fa6ajsc7xgz4kpuqbsqcxhyj5zq7qa3qwkf6wczcqjbwqqep3rqza"
+name = "rustc.tgz"
+large = true
+
+[[windows.deps.ext]]
+url  = "${RUST_DIST}/cargo-${RUST_VER}-x86_64-pc-windows-msvc.tar.gz"
+hash = "Fujojgktainooweokoips4krdamaloocxk5y5rcupizxxihjeydwq"
+name = "cargo.tgz"
+large = true
+
+[[windows.deps.ext]]
+url  = "${RUST_DIST}/rust-std-${RUST_VER}-x86_64-pc-windows-msvc.tar.gz"
+hash = "F7t2raiyj6jcma5amrp62unx6p2yec74f3uh4i477cnkczsawsava"
+name = "rust-std.tgz"
+large = true
+
+[unix]
+shell = "bash"
+cmd = '''
+set -eu
+for c in rustc cargo rust-std; do
+  tar -xzf $c.tgz --strip-components=2
+done
+rm manifest.in
+
+echo "PATH=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/bin:\${PATH}" > BUFA.env
+echo "CARGO_HOME=\${BUFA_CACHE_ROOT}/$BUFA_CACHE_DIR/CargoHome" >> BUFA.env
+'''
+
+[[linux.deps.ext]]
+url  = "${RUST_DIST}/rustc-${RUST_VER}-x86_64-unknown-linux-gnu.tar.gz"
+hash = "Frto4qobnb4ckwc65qbozlmpwfwakig3rxxex3nitegrkm6tokdrq"
+name = "rustc.tgz"
+large = true
+
+[[linux.deps.ext]]
+url  = "${RUST_DIST}/cargo-${RUST_VER}-x86_64-unknown-linux-gnu.tar.gz"
+hash = "F7eizwlgusogjnymezpc6wsaewsjuodnoqj454ndojt72hhafp3kq"
+name = "cargo.tgz"
+large = true
+
+[[linux.deps.ext]]
+url  = "${RUST_DIST}/rust-std-${RUST_VER}-x86_64-unknown-linux-gnu.tar.gz"
+hash = "Fkmnif7qd6zmh5zwsjfj5frfnkvsejdwdiwr3hbnceowgtqqxfoda"
+name = "rust-std.tgz"
+large = true
+
+[[macos.deps.ext]]
+url  = "${RUST_DIST}/rustc-${RUST_VER}-aarch64-apple-darwin.tar.gz"
+hash = "F5rmz4ufvgyrgwx47pjb2ljmr6xjgel4dr6q256sr6kdsnstfxi4q"
+name = "rustc.tgz"
+large = true
+
+[[macos.deps.ext]]
+url  = "${RUST_DIST}/cargo-${RUST_VER}-aarch64-apple-darwin.tar.gz"
+hash = "Fubjr3jkxcqzwbnvaahzvehr3kxo5dyofflryv3fpy7kqwtqloxxq"
+name = "cargo.tgz"
+large = true
+
+[[macos.deps.ext]]
+url  = "${RUST_DIST}/rust-std-${RUST_VER}-aarch64-apple-darwin.tar.gz"
+hash = "Fas6w4pifyy3mwxfwgrlib2bzcebt62xa273hywp7dznmowcxxkzq"
+name = "rust-std.tgz"
+large = true
