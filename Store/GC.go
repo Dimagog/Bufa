@@ -1,7 +1,6 @@
 package Store
 
 import (
-	"errors"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	vfs "github.com/spf13/afero"
 
 	"github.com/dimagog/bufa/Hashing"
 	"github.com/dimagog/bufa/internal/Util"
@@ -151,12 +149,7 @@ func (s *Store) gcContentRoot(root string, srcPresent func(path string) bool, vi
 }
 
 func (s *Store) listInfos(root string) []fs.FileInfo {
-	infos, err := vfs.ReadDir(s.fs, root)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	c.Checkf(err, "ReadDir '%s'", root)
-	return infos
+	return vfsx.ReadDirIfExists(s.fs, root)
 }
 
 func (s *Store) listNames(root string) []string {

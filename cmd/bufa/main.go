@@ -4,7 +4,7 @@
 //	bufa (build | b) [<dir>...]   # build directories in isolation
 //	bufa (dirty | d) [<dir>...]   # build in place in the source tree
 //	bufa gc [<dir>]            # garbage-collect the build store
-//	bufa check [<dir>]         # verify build store integrity
+//	bufa check [<dir>]         # verify build store and global artifact cache integrity
 //	bufa hash <path>           # print the content hash of a file or directory
 //	bufa nuke [<dir>]          # stop the watcher daemon and delete the entire build dir
 //	bufa daemon stop [<dir>]   # stop the watcher daemon and the global name server
@@ -97,7 +97,7 @@ func (c *GcCmd) Run(rc *runContext) error {
 }
 
 func (c *CheckCmd) Run(rc *runContext) error {
-	checkMain(rc.out, c.Fix)
+	checkMain(rc.out, c)
 	return nil
 }
 
@@ -256,33 +256,55 @@ func gcMain(out io.Writer, reportFreedSpace bool) {
 	}
 }
 
-func checkMain(out io.Writer, fix bool) {
+func checkMain(out io.Writer, cmd *CheckCmd) {
 	// Already true here means the user passed --safe-hashing; must test before the force-set below.
 	if Hashing.SafeHashing {
 		fmt.Fprintln(out, "Note: check command always hashes safely, so --safe-hashing flag is redundant")
 	}
 	// Verification must never trust hash-named link targets
 	Hashing.SafeHashing = true
-	rc := Runtime.PrepareConfigWithNoDaemon(out)
-	DaemonClient.Stop(rc.BldRoot, rc.DaemonDisabled, out)
-	st := Store.NewStore(rc.BldFS).Check(out, fix, DaemonClient.SockName)
+	var failed []string
+	if !cmd.GlobalOnly {
+		rc := Runtime.PrepareConfigWithNoDaemon(out)
+		DaemonClient.Stop(rc.BldRoot, rc.DaemonDisabled, out)
+		st := Store.NewStore(rc.BldFS).Check(out, cmd.Fix, DaemonClient.SockName)
+		fmt.Fprintf(out, "Check: %d content dirs hashed, %d links verified%s\n", st.CheckedContent, st.CheckedLinks,
+			checkProblems(st.CorruptContent, st.BadLinks, 0 /*stagingLeftovers*/, st.UnexpectedEntries, st.RemovedEntries))
+		if st.HasProblems() {
+			failed = append(failed, "store")
+		}
+	}
+	if !cmd.NoGlobal {
+		ac := ArtifactCache.New(ArtifactCache.GetCacheDir())
+		stats := ac.Check(out, cmd.Fix)
+		fmt.Fprintf(out, "Check Global Artifact Cache '%s': %d artifacts hashed, %d url links verified%s\n", ac.Dir(),
+			stats.CheckedEntries, stats.CheckedLinks,
+			checkProblems(stats.CorruptEntries, stats.BadLinks, stats.StagingLeftovers, stats.UnexpectedEntries, stats.RemovedEntries))
+		if stats.HasProblems() {
+			failed = append(failed, "Global Artifact Cache")
+		}
+	}
+	// fix removes every reported problem (a failed removal panics), so only a plain check can fail.
+	c.Require(cmd.Fix || len(failed) == 0, "%s check failed", strings.Join(failed, " and "))
+}
+
+func checkProblems(corrupt, badLinks, stagingLeftovers, unexpected, removed int) string {
 	var problems []string
 	countIf := func(n int, what string) {
 		if n > 0 {
 			problems = append(problems, fmt.Sprintf("%d %s", n, what))
 		}
 	}
-	countIf(st.CorruptContent, "corrupt")
-	countIf(st.BadLinks, "bad links")
-	countIf(st.UnexpectedEntries, "unexpected entries")
-	countIf(st.RemovedEntries, "entries removed")
+	countIf(corrupt, "corrupt")
+	countIf(badLinks, "bad links")
+	countIf(stagingLeftovers, "staging leftovers")
+	countIf(unexpected, "unexpected entries")
+	countIf(removed, "entries removed")
 	suffix := ""
 	if len(problems) > 0 {
 		suffix = "; " + strings.Join(problems, ", ")
 	}
-	fmt.Fprintf(out, "Check: %d content dirs hashed, %d links verified%s\n", st.CheckedContent, st.CheckedLinks, suffix)
-	// fix removes every reported problem (a failed removal panics), so only a plain check can fail.
-	c.Require(fix || st.Ok(), "store check failed")
+	return suffix
 }
 
 func hashMain(out io.Writer, path string) {

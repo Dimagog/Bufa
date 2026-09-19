@@ -115,6 +115,15 @@ func TryReadSmallFileFast(fsys vfs.Fs, name string) []byte {
 	}
 }
 
+func ReadDirIfExists(fsys vfs.Fs, dir string) []fs.FileInfo {
+	infos, err := vfs.ReadDir(fsys, dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	c.Checkf(err, "ReadDir '%s'", dir)
+	return infos
+}
+
 // One Readdirnames(1) probes emptiness without reading the whole listing. vfs deliberately: the
 // deletion stays jailed to the caller's rooted fs.
 func RemoveDirIfEmpty(fsys vfs.Fs, dir string) bool {

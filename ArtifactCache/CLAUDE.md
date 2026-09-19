@@ -3,21 +3,23 @@
 Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
 
 - Global content-addressed cache of `[[deps.ext]]` artifacts (`Doc/Specs/ExternalDeps.md`), per-user, outliving any
-  build root — `bufa gc` never touches it, nothing evicts. Public API: `GetCacheDir()` (`$BUFA_GLOBAL_CACHE_DIR`;
-  else `os.UserCacheDir()`'s `bufa` subdir), `New(dir)` (a `*BasePathFs` like the project store's — `RealPath` link
-  targets), `Ensure(url, expectedHash, out) string` (abs OS entry path; a hit needs **both** the `F` entry and the
+  build root — `bufa gc` never touches it, nothing evicts. Public API: `GetCacheDir()` (the **`bufa` subdir** of
+  `$BUFA_GLOBAL_CACHE_DIR`, else of `os.UserCacheDir()` — appended in both cases, so the cache dir is always bufa's
+  own and nothing can be in it by mistake, the premise `Check`'s fix deletes unrecognized entries on), `New(dir)`
+  (a `*BasePathFs` like the project store's — `RealPath` link targets),
+  `Ensure(url, expectedHash, out) string` (abs OS entry path; a hit needs **both** the `F` entry and the
   url's link targeting it, and is then the proof: zero network, zero verification, zero output; anything less —
   including an entry missing its url link, a crashed run's publish window — fetches and re-verifies),
   `EnsureURLBinding(url, expectedHash, out)` (same minus the `F` presence probe — for a caller that already proved
   the entry, dirty's current `large` placement), `Contains(hash)`, `EntryPath(hash)`, `Dir()`, `Owns(target)` (abs
   OS path points into the cache — dirty mode telling a stale-pin cache link from a foreign one), `Fs()`,
   `QueryHashSentinel="?"`, `Nuke()` (`bufa nuke --global`/`--global-only`: the one sanctioned delete path —
-  user-requested, **whole-cache**, never eviction; `Store.NukeDir` with the cache-owned predicate: regular files
+  user-requested, **whole-cache**, never eviction; `Store.NukeDir` with the **Ownership** predicate: regular files
   must be `IsValidFileHash` entries or `fetch-` staging leftovers, symlinks must be `url-` staging leftovers or url
   links — **any symlink targeting an `F` entry name**, the link's own name never consulted; anything else refuses;
   `NukeDir`'s `RemoveAll` clears the read-only attribute on Windows, so the insert-time chmod needs no separate
-  pass). Entry names are their verified content hash, so hash walks fold a cache link's target basename instead of
-  streaming the referent (Hashing's trusted-link shortcut).
+  pass), `Check(out, fix) CheckStats` (**Check**). Entry names are their verified content hash, so hash walks fold
+  a cache link's target basename instead of streaming the referent (Hashing's trusted-link shortcut).
 - Layout: `F<hash>` verified files; `<encoded url>` → `F<hash>` **url links** (`urlLinkName`: the url text with
   Windows-forbidden filename chars swapped for look-alike Unicode — `/`→`∕`, `:`→`꞉`, `?`→`？`, …; an encoding
   exceeding `maxUrlNameLen` is trimmed at a rune boundary with `_U<hash(url)>` (`Hashing.HashUrl`) replacing the
@@ -41,6 +43,31 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   re-downloaded unchanged), the mismatch error appends a fix-the-pin hint. `QueryHashSentinel` ⇒ the same
   admit-then-fail printing the hash — never auto-trust silently. A real download prints `Downloading <url>` to `out`
   regardless of log level.
+- **Ownership** (`classify(info) (entryKind, linkTarget)`): the one rule for "bufa wrote this", shared by `Nuke`'s
+  refusal and `Check` so they can't drift — a regular `fetch-*` file (`kindFetchStaging`) or `F<hash>` file
+  (`kindEntry`); a `url-*` symlink (`kindUrlStaging`) or a symlink whose raw target is an `F` key (`kindUrlLink`,
+  one `Readlink`, returned so Check never reads it twice); everything else — dirs (an `F`-named one included),
+  other names, symlinks with any other target — is `kindForeign`.
+- **Check** (`Check.go`, `bufa check`'s cache half; read-only unless `fix`): one `ReadDir` of the cache root,
+  every entry classified once, reported in enumeration order. `kindEntry`: `Hashing.HashFile` under
+  `contract.Rescue` against the name (unreadable ⇒ "cannot be hashed", verification continues) ⇒ `CorruptEntries`,
+  the report naming the url links targeting it. `kindUrlLink`: target not among the enumerated `kindEntry` names ⇒
+  `BadLinks`; but an **`F`-named** one is `CorruptEntries` instead (`Contains` Stats through links, so it would
+  serve another entry's bytes under its own pin — and a url link through it is then a bad link). Staging files:
+  younger than `stagingGracePeriod` (5m, by the entry's own `ModTime` — a growing download keeps refreshing it; a
+  var only so tests can age a `url-` symlink, which `os.Chtimes` can't) are **invisible** — not counted, reported,
+  or removed, since the cache is lock-free and one may be another process's fetch in flight; older ⇒
+  `StagingLeftovers`. `kindForeign` ⇒ `UnexpectedEntries`. `fix` removes **everything reported**, same policy as
+  `Store.Check` (cmd/bufa passes every fix run unconditionally): corrupt entries with their url links (links first,
+  so a mid-fix crash leaves an unlinked entry, never a link vouching for nothing), bad links, staging leftovers —
+  plain `Remove`s — and unexpected entries via `RemoveAll` (a dir goes whole, a symlink as the link object). That
+  last delete is safe only because `GetCacheDir` always appends `bufa`: a mis-set `$BUFA_GLOBAL_CACHE_DIR` can't
+  point the cache **at** someone's files. A caller handing `New` any other dir gets no such guarantee. This is the
+  second sanctioned delete path beside `Nuke` (which still **refuses** on a foreign entry), and the only per-entry
+  one: corruption removal, never eviction. Links resolve **before** entries, so a corrupt
+  entry's fix knows every url link to take down. Problems print one line each with **absolute** paths (the user
+  has no other way to learn where the cache lives). Missing cache dir ⇒ zero stats, no output. No `SafeHashing`
+  assert: nothing here hashes through a link.
 
 ## Cross-package contracts
 
@@ -57,7 +84,9 @@ Each binds this package to another; changing either side breaks the other with n
   here, so a published store tree depends on this cache being immutable, never evicting, and untouched by `bufa gc`.
   `Nuke` deliberately breaks that, user-requested and whole-cache: every project's published `large` links dangle
   until their next fetch + rebuild (a dangling link is a hard error in hash walks, so `bufa check` reports it rather
-  than serving it). Partial eviction remains forbidden.
+  than serving it). `Check`'s `fix` does the same to one **corrupt** entry: `Store.Check` streams through the link
+  (`SafeHashing`), so the trees linking to it report corrupt in the same `bufa check` run, whichever half runs
+  first. Partial eviction remains forbidden.
 - [Hashing](../Hashing/CLAUDE.md) — url links are named by `urlLinkName`'s encoded url text, owned here; `HashUrl`
   supplies only the `_U<hash(url)>` tail of trimmed overlong names. Entry names are `F<verified content hash>`,
   exactly the invariant the trusted-link shortcut rests on: a name that could ever be untruthful would fold into the

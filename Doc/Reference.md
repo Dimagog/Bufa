@@ -188,7 +188,15 @@ already taken by a real source file.
 > plain accidental write fails loudly, but a script dedicated to misbehave, that corrupts or replaces the file corrupts
 > the entry for every project, and since a cache hit is trusted by name with no re-verification, no later build notices.
 
-`bufa check` detects a corrupted entry that an exported `large` artifact points at.
+`bufa check` verifies the global cache along with the project's store: it re-hashes every cached artifact against
+its name and reports any that no longer match. `bufa check --fix` deletes a corrupted artifact, so the next build
+downloads and verifies it afresh.
+
+`--fix` also deletes anything in the cache dir that Bufa does not recognize, except download staging files younger
+than 5 minutes (another Bufa process may still be fetching).
+
+`--no-global` skips the global cache; `--global-only` checks nothing but the global cache, and works outside a
+project.
 
 `bufa nuke --global-only` (or `--global`) deletes the whole cache; the next build re-downloads and re-verifies every
 artifact.
@@ -409,9 +417,10 @@ Set these in the environment `bufa` runs in:
   `$BUFA_BUILD_ROOT/.BUFA`).
 * **`BUFA_NO_DAEMON`** — any non-empty value: never start or use the watcher daemon, like `--no-daemon` on every
   command. `bufa nuke` still stops a running daemon before deleting the store.
-* **`BUFA_GLOBAL_CACHE_DIR`** — the location of the global `[[deps.ext]]` artifact cache. Default: the `bufa` subdir
-  of the user cache dir — `%LOCALAPPDATA%\bufa` on Windows, `$XDG_CACHE_HOME/bufa` or `~/.cache/bufa` on Linux,
-  `~/Library/Caches/bufa` on macOS.
+* **`BUFA_GLOBAL_CACHE_DIR`** — the parent dir of the global `[[deps.ext]]` artifact cache, which is always its
+  `bufa` subdir (a dir Bufa owns outright, so `bufa check --fix` may delete anything unrecognized in it).\
+  Default: the user cache dir — giving `%LOCALAPPDATA%\bufa` on Windows, `$XDG_CACHE_HOME/bufa` or `~/.cache/bufa` on
+  Linux, `~/Library/Caches/bufa` on macOS.
 * **`LOG_LEVEL`** — the log level when `--log-level` is not given: `none` (default, silent), `error`, `warn`, `info`,
   `debug`. Also read by the daemon process.
 * **`LOG_SOURCE`** — `true` or `1`: append the `file:line` of each log record.

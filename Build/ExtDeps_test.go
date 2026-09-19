@@ -43,7 +43,7 @@ func extFixture(t *testing.T, payload *[]byte) (*fixture, *ArtifactCache.Cache, 
 	cacheDir := filepath.Join(t.TempDir(), "cache")
 	t.Setenv("BUFA_GLOBAL_CACHE_DIR", cacheDir)
 	srv, hits := serveArtifact(t, payload)
-	return f, ArtifactCache.New(cacheDir), srv.URL + "/art.bin", hits
+	return f, ArtifactCache.New(ArtifactCache.GetCacheDir()), srv.URL + "/art.bin", hits
 }
 
 func extToml(url, pin string, extra ...string) string {
@@ -341,7 +341,7 @@ func TestBuild_ExtDep_LinkStagedNestedDepConflictFails(t *testing.T) {
 	}
 	Hashing.SafeHashing = true
 	defer func() { Hashing.SafeHashing = false }()
-	if st := b.store.Check(io.Discard, false); !st.Ok() {
+	if st := b.store.Check(io.Discard, false); st.HasProblems() {
 		t.Errorf("store corrupted by the failed staging attempt: %+v", st)
 	}
 }

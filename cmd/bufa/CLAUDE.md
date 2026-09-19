@@ -24,7 +24,8 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../../CLAUDE.md).
   `ModePostShell`, **exactly one** target — `buildMain` hard-fails a session flag with more than one `<dir>` before
   root resolution, since Runtime would open a session for every target; a session is never a build, so no
   `Build result:` line; both imply `--force` for the target via `Runtime.ForceRebuildFor`; `buildMain` assigns
-  `rc.BuildMode` and `rc.In` = the `runContext`'s stdin alongside the other per-dir policies). check: `--fix` (`-f`).
+  `rc.BuildMode` and `rc.In` = the `runContext`'s stdin alongside the other per-dir policies). check: `--fix`
+  (`-f`), `--no-global`/`--global-only` (kong `xor`).
   nuke: `--global`/`--global-only`/`--cache-only` (kong `xor`) + `--yes`. gc: `--no-size`. Root-level, global to
   every subcommand: `--log-level` (`-l`; default none ⇒ silent success), `--safe-hashing` (long-only — `-s` is
   `--shell`; sets `Hashing.SafeHashing`; check forces it on, and `check -s` prints a redundancy note — `checkMain`
@@ -49,9 +50,14 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../../CLAUDE.md).
   names; safe because gc never mutates the source tree); reports each non-zero `GCStats` counter, then — unless
   `--no-size` — an indented `    freed <n>` line in `humanize.IBytes` form; a squeaky-clean run prints no freed
   line. `check` — `PrepareConfigWithNoDaemon` + `DaemonClient.Stop`, then
-  `Store.Check(out, fix, DaemonClient.SockName)` — the same sock-only allowlist `nuke` hands `Store.Nuke`; prints
-  each problem plus a summary, exits 1 on any problem. `--fix` deletes everything check reports, so a fix run
-  cannot fail on findings, only on a removal error; `checkMain` requires `fix || st.Ok()`. `hash` — `Hashing.Hash`
+  `Store.Check(out, fix, DaemonClient.SockName)` — the same sock-only allowlist `nuke` hands `Store.Nuke` — then
+  `ArtifactCache.New(GetCacheDir()).Check(out, fix)`: two independent halves, store first, each printing its
+  problems plus its own summary line (`Check: …` / `Check Global Artifact Cache '<dir>': …`, problem counts folded
+  by the shared `checkProblems`). The cache half is **on by default**; `--no-global` drops it, `--global-only`
+  drops the store half — root resolution and the daemon stop with it, so it works outside a project. Exits 1 on any
+  problem, the error naming the failed half(s) (`store` / `Global Artifact Cache`), after **both** ran. `--fix`
+  deletes everything check reports in either half, so a fix run cannot fail on findings, only on a removal error;
+  `checkMain` requires `fix || len(failed) == 0`. `hash` — `Hashing.Hash`
   of a plain OS path (own kong arg, not `dirArg`; no project root, store, or daemon). `nuke` — stop the daemon and
   delete the build root (`--global`: plus the artifact cache; `--global-only`: only the cache, skipping root
   resolution so it works outside a project; `--cache-only`: the target becomes `<bldRoot>/user`, emptied via

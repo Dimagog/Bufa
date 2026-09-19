@@ -149,12 +149,12 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   directory, and a `∕` symlink whose target is `cacheDirName(pathFromLinkName(name))` and present as a dir; anything
   else is `BadLinks`/`UnexpectedEntries` (an unlinked `P…` is gc's job). Problems print one line each to `out`;
   returns `CheckStats{CheckedContent, CheckedLinks, CorruptContent, BadLinks, UnexpectedEntries, RemovedEntries}`
-  with `Ok()`. `fix` deletes each corrupt entry plus every index link referencing it (`fixCorrupt`, links first so a
-  mid-fix crash leaves an orphan for gc), **every bad link** (a dangling one would serve a phantom hit —
+  with `HasProblems()`. `fix` deletes each corrupt entry plus every index link referencing it (`fixCorrupt`, links
+  first so a mid-fix crash leaves an orphan for gc), **every bad link** (a dangling one would serve a phantom hit —
   `GetLinkTarget` never stats the target), **and every unexpected entry** (`RemoveAll`): one policy for every root —
   check reports whatever isn't a well-formed bufa entry, fix removes all of it, so `checkMain` passes iff
-  `fix || Ok()`. A deleted `B` makes its ∕ referrers dangling, caught in the same run via the `removed` set. The
-  caller must stop the daemon first. `dirty/` is not checked. Missing roots are no-ops.
+  `fix || !HasProblems()`. A deleted `B` makes its ∕ referrers dangling, caught in the same run via the `removed`
+  set. The caller must stop the daemon first. `dirty/` is not checked. Missing roots are no-ops.
 
 ## Cross-package contracts
 
@@ -188,7 +188,9 @@ Each binds this package to another; changing either side breaks the other with n
 - [ArtifactCache](../ArtifactCache/CLAUDE.md) — a `large` + `export` ext dep ships into `out/<D…>` as a symlink
   **object** whose target lives outside every root Store manages. Such a tree stays valid only because the global
   cache is immutable, never evicts, and `bufa gc` never touches it — GC, Check, and the publish policy treat those
-  targets as durable.
+  targets as durable. The two deletes that break it are user-requested: `nuke --global`, and `bufa check --fix`
+  removing a **corrupt** cache entry — `Check` streams through the link under `SafeHashing`, so a tree linking to
+  that entry reports `CorruptContent` in the same run (mismatch if this half runs first, dangling if second).
 - [Runtime](../Runtime/CLAUDE.md) — every symlink op hard-requires `s.fs` to resolve `RealPath`, and vfsx's
   `CopyFileW` engine requires the source fs to forward it. Runtime builds the FS pair, so wrapping `BldFS` or the src
   half in any afero decorator that hides `RealPath` panics inside Store on every link and OS copy.

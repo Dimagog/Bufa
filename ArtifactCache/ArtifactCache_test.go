@@ -71,8 +71,8 @@ func TestUrlLinkName_OverlongTrimKeepsRuneBoundary(t *testing.T) {
 func TestCacheDir_EnvOverride(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("BUFA_GLOBAL_CACHE_DIR", dir)
-	if got := GetCacheDir(); got != dir {
-		t.Errorf("GetCacheDir() = %q, want BUFA_GLOBAL_CACHE_DIR %q", got, dir)
+	if got, want := GetCacheDir(), filepath.Join(dir, "bufa"); got != want {
+		t.Errorf("GetCacheDir() = %q, want the 'bufa' subdir of BUFA_GLOBAL_CACHE_DIR %q", got, want)
 	}
 }
 

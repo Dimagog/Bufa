@@ -134,8 +134,9 @@ Everything else goes. Explicitly:
   verify-at-insert / trust-on-hit admission gate, flat `F<hash>` entry naming (what lets a `large` link fold instead of
   stream), url links named by the look-alike-Unicode-encoded url text (overlong ⇒ trimmed + `_U<hash>` tail),
   read-only entries, same-dir staging + atomic-rename publish under lock-free concurrent writers,
-  `$BUFA_GLOBAL_CACHE_DIR` resolution, the `hash = "?"` bootstrap, and why nothing ever evicts except `Nuke`'s
-  user-requested whole-cache delete.
+  `$BUFA_GLOBAL_CACHE_DIR` resolution, the `hash = "?"` bootstrap, why nothing ever evicts except `Nuke`'s
+  user-requested whole-cache delete, and `bufa check`'s cache half (`Check`) with the ownership rule it shares with
+  `Nuke`.
 - [BuildConfig](BuildConfig/CLAUDE.md) — the `BUFA`/`.BUFA`-marker shapes + the two TOML gateways: runtime-only
   `toml:"-"` fields (`Hash`, `VirtualDir`, `VirtualDirMaterialized`) vs user-settable ones, the ordered `EnvTable[V]`
   both `[env]` tables decode into (document order restored from `toml.MetaData.Keys()` inside the gateway, a platform

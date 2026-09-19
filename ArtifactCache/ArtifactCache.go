@@ -63,10 +63,11 @@ func urlLinkName(url string) string {
 type Cache struct{ fs *vfs.BasePathFs }
 
 func GetCacheDir() string {
-	if env := os.Getenv("BUFA_GLOBAL_CACHE_DIR"); env != "" {
-		return env
+	base := os.Getenv("BUFA_GLOBAL_CACHE_DIR")
+	if base == "" {
+		base = c.With("Resolve user cache dir; set BUFA_GLOBAL_CACHE_DIR to place the artifact cache").Check2(os.UserCacheDir())
 	}
-	base := c.With("Resolve user cache dir; set BUFA_GLOBAL_CACHE_DIR to place the artifact cache").Check2(os.UserCacheDir())
+	// Always a subdir of its own: Check's fix deletes whatever it can't recognize in there.
 	return filepath.Join(base, "bufa")
 }
 
@@ -160,21 +161,40 @@ func (ac *Cache) fetch(url, expectedHash string, out io.Writer) {
 // The only delete path (bufa nuke --global): user-requested, whole-cache — never eviction.
 func (ac *Cache) Nuke() {
 	Store.NukeDir("Artifact Cache", ac.Dir(), func(e fs.FileInfo) bool {
-		name := e.Name()
-		if e.Mode()&fs.ModeSymlink != 0 {
-			return strings.HasPrefix(name, urlLinkPrefix) || ac.isUrlLink(name)
-		}
-		if e.Mode().IsRegular() {
-			return strings.HasPrefix(name, fetchPrefix) || Hashing.IsValidFileHash(name)
-		}
-		return false
+		kind, _ := ac.classify(e)
+		return kind != kindForeign
 	})
 }
 
-// Url links are recognized by target alone — the link's own name is never consulted.
-func (ac *Cache) isUrlLink(name string) bool {
-	target, err := vfsx.Readlink(ac.fs, name)
-	return err == nil && Hashing.IsValidFileHash(target)
+type entryKind int
+
+const (
+	kindForeign      entryKind = iota // nothing bufa writes
+	kindEntry                         // regular F<hash> file
+	kindUrlLink                       // symlink targeting an F<hash> name
+	kindFetchStaging                  // regular fetch-* file
+	kindUrlStaging                    // url-* symlink
+)
+
+// The cache's ownership rule, shared by Nuke's refusal and Check. A url link is recognized by
+// target alone — the link's own name is never consulted.
+func (ac *Cache) classify(e fs.FileInfo) (kind entryKind, linkTarget string) {
+	name := e.Name()
+	if e.Mode()&fs.ModeSymlink != 0 {
+		if strings.HasPrefix(name, urlLinkPrefix) {
+			kind = kindUrlStaging
+		} else if target, err := vfsx.Readlink(ac.fs, name); err == nil && Hashing.IsValidFileHash(target) {
+			kind = kindUrlLink
+			linkTarget = target
+		}
+	} else if e.Mode().IsRegular() {
+		if strings.HasPrefix(name, fetchPrefix) {
+			kind = kindFetchStaging
+		} else if Hashing.IsValidFileHash(name) {
+			kind = kindEntry
+		}
+	}
+	return kind, linkTarget
 }
 
 func (ac *Cache) publish(tmpName, hash string) {

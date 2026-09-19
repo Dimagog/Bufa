@@ -22,8 +22,8 @@ type CheckStats struct {
 	RemovedEntries    int // entries deleted (fix mode only)
 }
 
-func (st CheckStats) Ok() bool {
-	return st.CorruptContent+st.BadLinks+st.UnexpectedEntries == 0
+func (st CheckStats) HasProblems() bool {
+	return st.CorruptContent+st.BadLinks+st.UnexpectedEntries != 0
 }
 
 // cmd/bufa passes every fix run unconditionally: whatever is reported here MUST be removed under fix.

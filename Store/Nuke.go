@@ -35,6 +35,7 @@ func Nuke(bldRoot string, allowedFiles ...string) {
 // the whole operation, naming the offenders (dirs with a trailing '/'). A missing dir is a no-op.
 func NukeDir(friendlyName, dir string, owned func(e fs.FileInfo) bool) {
 	fsys := vfs.NewBasePathFs(vfs.NewOsFs(), dir)
+	// NOT vfsx.ReadDirIfExists: it folds missing into empty, and an empty dir must still be removed.
 	entries, err := vfs.ReadDir(fsys, ".")
 	if errors.Is(err, fs.ErrNotExist) {
 		return

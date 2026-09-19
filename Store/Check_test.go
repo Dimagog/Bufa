@@ -58,7 +58,7 @@ func TestCheck_CorruptInContentNamesSourceDir(t *testing.T) {
 	writeFile(t, s.fs, filepath.Join(InRoot, key, "a.txt"), []byte("TAMPERED"))
 
 	st, report := runCheck(s, false /*fix*/)
-	if st.CorruptContent != 1 || st.Ok() {
+	if st.CorruptContent != 1 || !st.HasProblems() {
 		t.Errorf("CheckStats = %+v, want 1 corrupt content dir", st)
 	}
 	if !strings.Contains(report, "CORRUPT: 'in/"+key+"'") {
@@ -405,7 +405,7 @@ func TestCheck_EmptyStoreNoop(t *testing.T) {
 	s := NewStore(vfs.NewMemMapFs())
 
 	st, report := runCheck(s, false /*fix*/)
-	if st != (CheckStats{}) || !st.Ok() {
+	if st != (CheckStats{}) || st.HasProblems() {
 		t.Errorf("Check on empty store = %+v, want zero stats", st)
 	}
 	if report != "" {
@@ -465,7 +465,7 @@ func TestCheck_TopLevelForeignEntries(t *testing.T) {
 			t.Errorf("fix must keep owned entry %q", name)
 		}
 	}
-	if st, _ := runCheck(s, false /*fix*/, "Extra.TXT", "bufa-d.sock"); !st.Ok() {
+	if st, _ := runCheck(s, false /*fix*/, "Extra.TXT", "bufa-d.sock"); st.HasProblems() {
 		t.Errorf("re-check after fix = %+v, want clean", st)
 	}
 }

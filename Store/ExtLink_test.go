@@ -65,7 +65,7 @@ func TestMoveStore_UnsafeFilterKeepsIncludedLinkDropsExcluded(t *testing.T) {
 	if exists(t, s.fs, filepath.Join(OutRoot, hash, "drop.bin")) {
 		t.Error("excluded link must be removed by the filter pass")
 	}
-	if got, _ := runCheck(s, false); !got.Ok() {
+	if got, _ := runCheck(s, false); got.HasProblems() {
 		t.Errorf("published linked tree fails check: %+v", got)
 	}
 }
@@ -158,7 +158,7 @@ func TestMoveStore_UnsafeDirLinkPublishes(t *testing.T) {
 	if twin := s.MoveStore(OutRoot, "bld2", PublishPlan{AllowLinks: true}); twin != hash {
 		t.Errorf("materialized twin key %q != dir-linked key %q", twin, hash)
 	}
-	if got, _ := runCheck(s, false); !got.Ok() {
+	if got, _ := runCheck(s, false); got.HasProblems() {
 		t.Errorf("published dir-linked tree fails check: %+v", got)
 	}
 }
@@ -184,7 +184,7 @@ func TestMoveStore_RelativeTargetEscapingTreeAbsolutized(t *testing.T) {
 	if data := c.Check2(os.ReadFile(published)); !bytes.Equal(data, []byte("P")) {
 		t.Errorf("published link reads %q, want the referent's bytes", data)
 	}
-	if st, _ := runCheck(s, false); !st.Ok() {
+	if st, _ := runCheck(s, false); st.HasProblems() {
 		t.Errorf("re-pointed tree fails check: %+v", st)
 	}
 }
@@ -208,7 +208,7 @@ func TestMoveStore_IntraTreeRelativeTargetKept(t *testing.T) {
 	if data := c.Check2(os.ReadFile(published)); !bytes.Equal(data, []byte("R")) {
 		t.Errorf("published link reads %q, want the referent's bytes", data)
 	}
-	if st, _ := runCheck(s, false); !st.Ok() {
+	if st, _ := runCheck(s, false); st.HasProblems() {
 		t.Errorf("intra-tree-linked store tree fails check: %+v", st)
 	}
 }

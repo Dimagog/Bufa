@@ -22,8 +22,10 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../../CLAUDE.md).
   `ReadSmallFileFast`/`TryReadSmallFileFast` (single open + one generous-buffer read + close — no size-probe Stat, no
   trailing EOF read, so a small config costs exactly 3 OS calls; the Try flavor returns nil on not-exist incl.
   `ENOTDIR`, a present empty file is non-nil, and a directory panics "Expected a file" — classified on the
-  Read-error path so the happy path stays 3 calls), `RemoveDirIfEmpty` (one `Readdirnames(1)` probe; missing /
-  non-dir / surviving entry ⇒ false untouched; vfs-based so the deletion stays jailed to the caller's rooted fs),
+  Read-error path so the happy path stays 3 calls), `ReadDirIfExists` (name-sorted infos; nil for a missing dir,
+  any other error panics — Store's `listInfos` and ArtifactCache's `Check`; not for a caller that must tell missing
+  from empty, like `NukeDir`), `RemoveDirIfEmpty` (one `Readdirnames(1)` probe; missing / non-dir / surviving
+  entry ⇒ false untouched; vfs-based so the deletion stays jailed to the caller's rooted fs),
   `RemoveAllUnder` (`RemoveAll` of every child by name, symlinks as link objects, keeping the dir; Store's
   `EmptyCacheDirs`).
 - **Cross-store ops (X-prefix, `(fs1, path1, fs2, path2)` shape)**:

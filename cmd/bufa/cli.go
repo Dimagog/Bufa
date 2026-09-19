@@ -12,7 +12,7 @@ type CLI struct {
 	Build  BuildCmd  `cmd:"" default:"withargs" aliases:"b" help:"Build each <dir> cleanly in isolation (default: current directory). Default command: 'bufa [<dir>...]' is shorthand for 'bufa build [<dir>...]'."`
 	Dirty  DirtyCmd  `cmd:"" aliases:"d" help:"Build each <dir> directly in the source tree, no isolation (default: current directory)."`
 	Gc     GcCmd     `cmd:"" help:"Garbage-collect the build store (removes orphaned cache entries)."`
-	Check  CheckCmd  `cmd:"" help:"Verify build store integrity: re-hash every content dir and validate index links (stops daemon)."`
+	Check  CheckCmd  `cmd:"" help:"Verify build store and Global Artifact Cache integrity: re-hash every content dir and cached artifact, validate index and url links (stops daemon)."`
 	Hash   HashCmd   `cmd:"" help:"Print the content hash of any file or directory."`
 	Nuke   NukeCmd   `cmd:"" help:"*DANGER* Delete build dir and/or Global Artifact Cache (stops daemon), or empty cache dir (--cache-only). Refuses when the dir contains anything bufa did not put there."`
 	Daemon DaemonCmd `cmd:"" help:"Watcher daemon control."`
@@ -53,7 +53,9 @@ type GcCmd struct {
 }
 
 type CheckCmd struct {
-	Fix bool `short:"f" help:"Delete corrupt content dirs, the index links referencing them, bad index links, and unexpected entries."`
+	Fix        bool `short:"f" help:"Delete corrupt content dirs and artifacts, the links referencing them, bad links, and unexpected entries."`
+	NoGlobal   bool `help:"Skip the global artifact cache (shared by all projects)." xor:"scope"`
+	GlobalOnly bool `help:"Verify only the global artifact cache, leave the build store alone." xor:"scope"`
 }
 
 // Its own required path arg, not dirArg: any file OR directory, as a plain OS path.

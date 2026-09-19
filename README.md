@@ -46,12 +46,12 @@ hash-and-cache build optimizations and leave the ceremony behind.
 
 In fact, you can be as dirty as you want depending on the stage of your project:
 
-* You can **start fast and loose** with almost no effort:
-  Drop a `BUFA` file into a directory, and fast rebuilds are yours.
-* **Tighten the screws as your project matures**, not before: filters, hermetic shells and toolchains, pinned
-  dependencies, reproducible builds.
+* You can **start fast and loose** with almost no effort: Drop a `BUFA` file into a directory, or simply rename your
+  current shell build script to `BUFA` and fast rebuilds are yours.
 * **Literally be dirty:** `bufa dirty` builds in place, right inside the source tree, still skipping any dir whose
   content hash hasn't changed. Perfect for bootstrapping a project or debugging a stubborn build script.
+* **Tighten the screws as your project matures**, not before: filters, hermetic shells and toolchains, pinned
+  dependencies, reproducible builds.
 * **Unsafe and non-hermetic builds are allowed.** Flip ['unsafe = true'](Doc/Reference.md#unsafe) and your script
   sees the real `PATH` and env vars of your machine. Such builds are still cached, just not forever: after a
   [configurable time](Doc/Reference.md#unsafettl) they quietly rebuild, so a toolchain change that breaks the build
@@ -227,7 +227,7 @@ for debugging a misbehaving build script. And so are `bufa --shell` and `bufa --
 | `bufa -f` / `bufa -F`     | Force rebuild of the target (or every visited dir), ignoring the cache. |
 | `bufa -o` / `bufa -O`     | Show the script's output for the target (or every dir).                 |
 | `bufa gc`                 | Sweep unreferenced store entries and report the bytes freed.            |
-| `bufa check [--fix]`      | Verify the store's integrity — and optionally heal it.                  |
+| `bufa check [--fix]`      | Verify the store and the global cache — and optionally heal them.       |
 | `bufa nuke`               | Delete the whole build store (after asking nicely).                     |
 
 A `/`-prefixed dir is project-root-relative: `bufa /test` from anywhere in the project builds `<root>/test`.

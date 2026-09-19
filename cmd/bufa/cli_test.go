@@ -100,6 +100,19 @@ func TestNukeFlags_ScopeIsExclusive(t *testing.T) {
 	}
 }
 
+func TestCheckFlags_ScopeIsExclusive(t *testing.T) {
+	if got := parseCLI(t, "check").Check; got.NoGlobal || got.GlobalOnly {
+		t.Error("check must verify both the store and the global cache by default")
+	}
+	if !parseCLI(t, "check", "--no-global", "-f").Check.NoGlobal || !parseCLI(t, "check", "--global-only").Check.GlobalOnly {
+		t.Error("--no-global and --global-only must parse")
+	}
+	var cli CLI
+	if _, err := newParser(&cli, nil, io.Discard, io.Discard).Parse([]string{"check", "--no-global", "--global-only"}); err == nil {
+		t.Error("bufa check --no-global --global-only must be a parse error: the scope flags are mutually exclusive")
+	}
+}
+
 func TestGcFlags_NoSize(t *testing.T) {
 	if parseCLI(t, "gc").Gc.NoSize {
 		t.Error("gc must measure freed bytes by default")
