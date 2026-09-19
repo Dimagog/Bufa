@@ -25,7 +25,21 @@ type examplesProject struct {
 	cache    *ArtifactCache.Cache
 }
 
+const examplesRequiredEnv = "BUFA_TEST_EXAMPLES_REQUIRED"
+
+// CI's examples job sets the variable: there a skip means nothing was verified, so it fails instead.
+func failIfSkipped(t *testing.T) {
+	if os.Getenv(examplesRequiredEnv) != "" {
+		t.Cleanup(func() {
+			if t.Skipped() {
+				t.Errorf("skipped while $%s is set", examplesRequiredEnv)
+			}
+		})
+	}
+}
+
 func openExamples(t *testing.T) examplesProject {
+	failIfSkipped(t)
 	examples := c.Check2(filepath.Abs(filepath.Join("..", "Examples")))
 	srcFS := vfs.NewBasePathFs(vfs.NewOsFs(), examples)
 	bld := t.TempDir()
@@ -34,13 +48,17 @@ func openExamples(t *testing.T) examplesProject {
 	return examplesProject{b: b, src: examples, bld: bld, cache: ArtifactCache.New(ArtifactCache.GetCacheDir())}
 }
 
+func (p examplesProject) hasPlatformCmd(dir string) bool {
+	cfg := p.b.getBuildConfig(dir)
+	return cfg.Cmd.Script != "" || cfg.Cmd.Disabled
+}
+
 // "" when dir has a command on this platform and each pinned archive is cached; unit is the `bufa` arg that caches it.
 func (p examplesProject) unavailable(dir, unit string) string {
-	cfg := p.b.getBuildConfig(dir)
-	if cfg.Cmd.Script == "" && !cfg.Cmd.Disabled {
+	if !p.hasPlatformCmd(dir) {
 		return dir + " is unavailable on this platform"
 	}
-	for _, dep := range cfg.Deps.Ext {
+	for _, dep := range p.b.getBuildConfig(dir).Deps.Ext {
 		if !p.cache.Contains(dep.Hash) {
 			return dir + "'s pinned archive is not cached; run `bufa " + unit + "` in Examples/ once"
 		}
@@ -84,6 +102,11 @@ func TestExamples_HelloUnits(t *testing.T) {
 		unit := strings.TrimSuffix(filepath.Base(cfgPath), Store.VirtualConfigSuffix)
 		t.Run(unit, func(t *testing.T) {
 			dir := filepath.Join("hello", unit)
+			// The one legitimate skip (hello/powershell off Windows), hence before failIfSkipped.
+			if !p.hasPlatformCmd(dir) {
+				t.Skip(dir + " is unavailable on this platform")
+			}
+			failIfSkipped(t)
 			provider := p.shellProviderOf(dir)
 			reason := p.unavailable(dir, "hello/"+unit)
 			if reason == "" {

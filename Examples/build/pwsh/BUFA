@@ -15,10 +15,17 @@ large = true
 
 [unix]
 shell = "bash"
-cmd = "tar -xzf pwsh.tgz"
+# the tarball ships pwsh without its exec bit
+cmd = "tar -xzf pwsh.tgz && chmod +x pwsh"
 
-[[unix.deps.ext]]
+[[linux.deps.ext]]
 url  = "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VER}/powershell-${PWSH_VER}-linux-x64.tar.gz"
 hash = "Fpvtsji2z4mvbwq7bmcej3imiwonhgubwle4e32fvbt6raxed427a"
+name = "pwsh.tgz"
+large = true
+
+[[macos.deps.ext]]
+url  = "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VER}/powershell-${PWSH_VER}-osx-arm64.tar.gz"
+hash = "F4yvh2wenas3ajq7vn46ngfmu5toq6atfrztoshawe2krfegt7usa"
 name = "pwsh.tgz"
 large = true

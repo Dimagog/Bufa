@@ -240,10 +240,16 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   `shell` or `postShell` and fails on a **nil** field at invocation; a prompt definition prepends `(bufa shell) ` to
   `prompt.env`. The environment is never logged. `Examples/` is a runnable mini project: a `.BUFA` with
   `shell = "nu"` over a `[shells]` catalogue, hermetic providers `build/nu`, `build/pwsh`, `build/elvish`, `build/shell`
-  (pinned archive as a non-exported `large` ext, unpacked under the native shell, `largeOutput`), the ambient
+  (pinned archive as a non-exported `large` ext — one per platform under `[[windows|linux|macos.deps.ext]]`, Linux
+  and macOS sharing the `[unix]` script and differing only through `[linux.env]`/`[macos.env]` values — unpacked
+  under the native shell, `largeOutput`), the ambient
   `build/powershell`, the `build/jdk.BUFA` toolchain provider (virtual; publishes a `BUFA.env` with `JAVA_HOME` +
   `PATH`) consumed by `java/`, and virtual consumers under `hello/`. `Examples_test.go` builds them against a scratch
-  store, **skip-if-absent** (pinned artifact cached, ambient exe on PATH, platform command present). Other tests use
+  store, **skip-if-absent** (pinned artifact cached, ambient exe on PATH, platform command present) — so plain
+  `go test` never touches the network, and CI's `examples` job is what un-skips it (it runs `buildall` first, which
+  fills the cache). That job sets `$BUFA_TEST_EXAMPLES_REQUIRED`: `failIfSkipped` then fails any skip from a
+  `t.Cleanup` (so a helper's own `t.Skip`, e.g. `skipIfNoSymlinks`, is caught too), except the one taken **before**
+  it is armed — a unit with no command on this platform. Other tests use
   `cmd/test-shell` (built once per test binary in `Shell_test.go`'s `TestMain`) and a wrapper provider whose
   `BUFA.shell` is the native preset TOML-encoded from `shellPresets`, never a re-spelled literal.
 - **Shell sessions** (`--shell`/`--post-shell` → `ModeShell`/`ModePostShell`, **target dir only**; both make

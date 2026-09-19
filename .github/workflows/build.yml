@@ -68,9 +68,56 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
+  # A release gate, and the one job that needs third-party hosts (on a cache miss): if one is down, re-run the job.
+  examples:
+    name: examples ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build bufa
+        run: |
+          go build -o dist/ ./cmd/bufa
+          echo "$GITHUB_WORKSPACE/dist" >> "$GITHUB_PATH"
+          echo "BUFA_GLOBAL_CACHE_DIR=$RUNNER_TEMP/bufa-cache" >> "$GITHUB_ENV"
+      # The Global Artifact Cache, keyed by every pin: any BUFA edit starts it empty (no restore-keys), so dropped
+      # pins never pile up. A hit needs an entry's url symlink too — hence native symlinks from Git's tar on
+      # Windows; a link lost in the round trip only costs that download again.
+      - uses: actions/cache@v6
+        env:
+          MSYS: winsymlinks:nativestrict
+        with:
+          path: ${{ env.BUFA_GLOBAL_CACHE_DIR }}
+          key: examples-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Examples/**/BUFA', 'Examples/**/*.BUFA') }}
+      - name: Build all (Unix)
+        if: runner.os != 'Windows'
+        working-directory: Examples
+        run: bash buildall.sh
+      - name: Build all (Windows)
+        if: runner.os == 'Windows'
+        working-directory: Examples
+        shell: cmd
+        run: call buildall.cmd
+      # The archives are cached now, so TestExamples_* check what each unit wrote; the variable fails any that still skips
+      - name: Verify outputs
+        env:
+          BUFA_TEST_EXAMPLES_REQUIRED: 1
+        run: go test ./Build -run '^TestExamples_' -v
+      - name: Stop daemon
+        if: always()
+        working-directory: Examples
+        run: bufa daemon stop || true
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, test]
+    needs: [build, test, examples]
     runs-on: ubuntu-latest
     permissions:
       contents: write

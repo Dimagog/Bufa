@@ -37,12 +37,28 @@ JDK=jdk
 mkdir -p $JDK
 tar -xzf jdk.tgz -C $JDK --strip-components=1
 
-echo "JAVA_HOME=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/$JDK" > BUFA.env
-echo "PATH=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/$JDK/bin:\${PATH}" >> BUFA.env
+# License texts only — and in the Linux archive all symlinks, which a safe build won't publish.
+rm -r "$JDK_HOME/legal"
+
+echo "JAVA_HOME=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/$JDK_HOME" > BUFA.env
+echo "PATH=\${BUFA_BUILD_ROOT}/$BUFA_BUILD_DIR/$JDK_HOME/bin:\${PATH}" >> BUFA.env
 '''
 
-[[unix.deps.ext]]
+[unix.env]
+JDK_HOME = "jdk"
+
+[[linux.deps.ext]]
 url  = "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-${JAVA_VER}%2B${JAVA_BUILD}/OpenJDK26U-jdk_x64_linux_hotspot_${JAVA_VER}_${JAVA_BUILD}.tar.gz"
 hash = "Fwkfyf5cvptsvfqdfx4x7fcetc2byzcny7wzodluimlaphy4ugs5a"
+name = "jdk.tgz"
+large = true
+
+# The macOS archive is an app bundle: the JDK proper sits under Contents/Home.
+[macos.env]
+JDK_HOME = "jdk/Contents/Home"
+
+[[macos.deps.ext]]
+url  = "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-${JAVA_VER}%2B${JAVA_BUILD}/OpenJDK26U-jdk_aarch64_mac_hotspot_${JAVA_VER}_${JAVA_BUILD}.tar.gz"
+hash = "Fqmaimrmspfgiyydjtndzra3wei3a6cjyz3eu3b2ibnusbayslh6a"
 name = "jdk.tgz"
 large = true

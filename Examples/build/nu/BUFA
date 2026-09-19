@@ -17,8 +17,14 @@ large = true
 shell = "bash"
 cmd = "tar -xzf nu.tgz --strip-components=1"
 
-[[unix.deps.ext]]
+[[linux.deps.ext]]
 url  = "https://github.com/nushell/nushell/releases/download/${NU_VER}/nu-${NU_VER}-x86_64-unknown-linux-gnu.tar.gz"
 hash = "Ftc6gg4vvqnu3d2z7fnstlrh4aw6qsj7wa6m3k7i23ofrigbq6w4a"
+name = "nu.tgz"
+large = true
+
+[[macos.deps.ext]]
+url  = "https://github.com/nushell/nushell/releases/download/${NU_VER}/nu-${NU_VER}-aarch64-apple-darwin.tar.gz"
+hash = "Fw2ynbj2pc4z7vknakv7spkz2u7qvjwfgvzl3zpcztyvbux4fohia"
 name = "nu.tgz"
 large = true

@@ -28,11 +28,24 @@ bufa hello/default          # downloads + unpacks nu once, then runs the cmd und
 bufa hello/pwsh-alias       # same with PowerShell 7
 bufa hello/powershell       # uses OS-installed powershell.exe; downloads nothing
 bufa hello/elvish           # same with Elvish
-bufa hello/shell            # same with prefix-dev/shell (a conda package: zip → zstd tarball, native tar reads both)
+bufa hello/shell            # same with prefix-dev/shell (a conda package: zip → zstd tarball; see below)
 bufa java                   # downloads + unpacks the JDK once, then javac + java under nu
 buildall.cmd                # every hello/* unit plus java (Windows)
+bash buildall.sh            # same on Linux and macOS
+nu buildall.nu              # same on any platform, if you have Nushell installed
+elvish buildall.elv         # same on any platform, if you have Elvish installed
 bufa --shell hello/default  # an interactive nu session in its build environment
 bufa --shell java           # same, with the JDK on PATH
 ```
 
 Build outputs land in the sibling `Examples.BUFA/` store (git-ignored).
+
+Every provider pins one archive per platform — Windows x64, Linux x64, macOS arm64 — as
+`[[windows.deps.ext]]`/`[[linux.deps.ext]]`/`[[macos.deps.ext]]` entries, while Linux and macOS share one `[unix]`
+script. Where the platforms differ, a `[linux.env]`/`[macos.env]` value carries the difference into that shared
+script: the conda build string in `build/shell`, the macOS app-bundle `Contents/Home` in `build/jdk`.
+
+`build/shell` shows a tool pinned only to unpack another: a conda package is a zip of zstd tarballs, which Windows'
+native `tar` opens but no stock Linux or macOS tool does. So on Unix the dir pins a second artifact — the static
+`micromamba` binary — and its script runs `micromamba package extract`. Neither artifact is published: only the
+shell and its `BUFA.shell` are.

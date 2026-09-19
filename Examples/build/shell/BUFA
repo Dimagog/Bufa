@@ -1,5 +1,6 @@
-# prefix-dev/shell ships only as a conda package: a zip holding zstd tarballs. Native tar reads both;
-# the pipe keeps the inner tarball out of the output (GNU tar needs zstd on PATH).
+# prefix-dev/shell ships only as a conda package: a zip holding zstd tarballs. Windows' native tar reads both, and
+# the pipe keeps the inner tarball out of the output. No stock Linux or macOS tool opens the zstd layer, so there
+# the unpacker is pinned too: micromamba, one static binary per platform.
 largeOutput = true
 
 [env]
@@ -18,15 +19,47 @@ hash = "F5bvfmvvz7h43zpecqqpfy2geivpviyd7inxvpnhn6ymkjzktwq6q"
 name = "shell.conda"
 large = true
 
+# install, not chmod: the staged micromamba is a link to a read-only cache entry with no exec bit
 [unix]
 shell = "bash"
-cmd = "tar -xOf shell.conda pkg-shell-${SHELL_VER}-${SHELL_BUILD}.tar.zst | tar -xf - --strip-components=1 bin/shell"
+cmd = '''
+set -euo pipefail
+
+install -m 755 micromamba "$TMPDIR/micromamba"
+"$TMPDIR/micromamba" package extract shell.conda pkg
+mv pkg/bin/shell .
+rm -r pkg
+'''
 
 [unix.env]
+MAMBA_VER = "2.9.0-0"
+
+[linux.env]
 SHELL_BUILD = "h6c30b3d_0"
 
-[[unix.deps.ext]]
+[[linux.deps.ext]]
 url  = "https://conda.anaconda.org/conda-forge/linux-64/shell-${SHELL_VER}-${SHELL_BUILD}.conda"
 hash = "Fz5bfduq644u4fa5nqjljmzojbmwjcfzrjddhlhleip3oviepez7q"
 name = "shell.conda"
+large = true
+
+[[linux.deps.ext]]
+url  = "https://github.com/mamba-org/micromamba-releases/releases/download/${MAMBA_VER}/micromamba-linux-64"
+hash = "F7x7rf2avzo6kegjyi75fdt2bv5y4w5ckbfbaojw57rxtsgtyg6ea"
+name = "micromamba"
+large = true
+
+[macos.env]
+SHELL_BUILD = "h8dba533_0"
+
+[[macos.deps.ext]]
+url  = "https://conda.anaconda.org/conda-forge/osx-arm64/shell-${SHELL_VER}-${SHELL_BUILD}.conda"
+hash = "F7qikyjebq5rlecvyiz6gabjzwnayx2p7ioh2l63qaero3sldux3q"
+name = "shell.conda"
+large = true
+
+[[macos.deps.ext]]
+url  = "https://github.com/mamba-org/micromamba-releases/releases/download/${MAMBA_VER}/micromamba-osx-arm64"
+hash = "Fxohr4wvepbm4yifztzc5oukfbrjvswuduakfhaq7xij7jgjknvca"
+name = "micromamba"
 large = true

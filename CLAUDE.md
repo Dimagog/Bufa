@@ -255,5 +255,7 @@ go vet ./...
 ```
 
 All three must pass before done. CI ([.github/workflows/build.yml](.github/workflows/build.yml)) runs them on
-ubuntu/windows/macos, so a Windows-only pass is not the bar (case-sensitive FS, FSEvents, an 8.3 `TEMP`). A `v*` tag
+ubuntu/windows/macos, so a Windows-only pass is not the bar (case-sensitive FS, FSEvents, an 8.3 `TEMP`). Its
+`examples` job builds every `Examples/` unit on the same three OSes — the only place the Linux and macOS halves of
+those configs run (see [.github/CLAUDE.md](.github/CLAUDE.md)). A `v*` tag
 push publishes the release binaries; the tag must equal `v` + `version.txt`.

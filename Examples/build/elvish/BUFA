@@ -17,8 +17,14 @@ large = true
 shell = "bash"
 cmd = "tar -xzf elvish.tgz"
 
-[[unix.deps.ext]]
+[[linux.deps.ext]]
 url  = "https://dl.elv.sh/linux-amd64/elvish-v${ELVISH_VER}.tar.gz"
 hash = "F7zi5haxygu5kxci2ipae6fw2tno4nljueqptityidkwllwytc47q"
+name = "elvish.tgz"
+large = true
+
+[[macos.deps.ext]]
+url  = "https://dl.elv.sh/darwin-arm64/elvish-v${ELVISH_VER}.tar.gz"
+hash = "Fwfefaezm3dviesbhp4dyi5v4ei4jhycraim3iax7puxhjnfiv77a"
 name = "elvish.tgz"
 large = true
