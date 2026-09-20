@@ -12,8 +12,8 @@ def --wrapped main [...args: string] {
   let on_windows = $nu.os-info.family == "windows"
   let units = glob hello/*.BUFA | path parse | get stem | sort
   for unit in $units {
-    # hello/powershell has a [windows] cmd only
-    if $on_windows or $unit != "powershell" {
+    # hello/powershell has a [windows] cmd only; hello/all aggregates these same units
+    if $unit != "all" and ($on_windows or $unit != "powershell") {
       build $"/hello/($unit)" ...$args
     }
   }

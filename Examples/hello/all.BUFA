@@ -1,0 +1,14 @@
+cmd = false
+
+deps.bld = [
+    "/hello/default",
+    "/hello/elvish",
+    "/hello/pwsh-alias",
+    "/hello/pwsh-path",
+    "/hello/raw",
+    "/hello/shell",
+]
+
+# hello/powershell has a [windows] cmd only
+[windows]
+deps.bld = ["/hello/powershell"]

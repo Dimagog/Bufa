@@ -1,7 +1,8 @@
 @echo off
 setlocal
 
-for /F %%i in ('dir /b hello\*.BUFA') do (
+rem hello/all aggregates these same units
+for /F %%i in ('dir /b hello\*.BUFA') do if /I not "%%~ni"=="all" (
   echo.
   bufa /hello/%%~ni %*
   if ERRORLEVEL 1 (

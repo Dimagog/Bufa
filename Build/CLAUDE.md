@@ -246,9 +246,13 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   `build/powershell`, the toolchain providers `build/java.BUFA`, `build/go.BUFA`, `build/clj/` (a real dir), and
   `build/rust.BUFA` — each publishes a `BUFA.env`; tool-specific settings are explained in the file's own comments
   — consumed by `java/`, `go/` (a nested Go module, so the repo's `./...` never sees it), `clj/` (with
-  `/build/java` too), and `rust/`, and virtual consumers under `hello/`. `rust/` is **not hermetic** — rustc links
-  with the ambient `link.exe`/`cc` — and so **CI only**: `buildall` builds it and its test runs only when
-  `$BUFA_TEST_EXAMPLES_REQUIRED` is set.
+  `/build/java` too), and `rust/`, and virtual consumers under `hello/`. `hello/all.BUFA` and `all.BUFA` are
+  scriptless aggregators (`cmd = false` + `deps.bld`: every `hello/*` unit; that plus the four toolchain consumers);
+  `hello/powershell`, whose cmd is `[windows]`-only, sits under `[windows] deps.bld`. `buildall` and
+  `TestExamples_HelloUnits` both glob `hello/*.BUFA` and leave the aggregator out (the scripts by name, the test by
+  `cmd = false`). `rust/` is **not hermetic** — rustc links with the ambient `link.exe`/`cc` — and so **CI only**:
+  `buildall` builds it and its test runs only when `$BUFA_TEST_EXAMPLES_REQUIRED` is set (`all.BUFA` lists it
+  regardless).
   `Examples_test.go` builds them against a scratch
   store, **skip-if-absent** (pinned artifact cached — the unit's and each bld dep's —, ambient exe on PATH, platform
   command present) — so plain

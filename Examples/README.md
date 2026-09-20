@@ -41,6 +41,21 @@ writes. A consumer lists the provider in `deps.bld` and finds the tools on `PATH
   brings `.cargo/` in, since dot entries are excluded by default.
 * The tool-specific settings are explained in each provider's own comments.
 
+## "Build Everything" Aggregators
+
+`all.BUFA` and `hello/all.BUFA` are virtual **aggregators**: `cmd = false` plus a `deps.bld` list — no script, no
+source, nothing published. Building one builds every dep it lists, and a cached dep costs nothing:
+
+| Aggregator  | Builds                                              |
+| ----------- | --------------------------------------------------- |
+| `hello/all` | every `hello/*` shell flavor                        |
+| `all`       | `hello/all` plus `java/`, `clj/`, `go/` and `rust/` |
+
+* `hello/all` lists `hello/powershell` under `[windows]`: that unit has a `[windows]` cmd alone, and a dep with no
+  command on the platform fails the build. Platform `deps.bld` entries append to the root list.
+* `all` takes `rust/` unconditionally, so it needs the platform's linker — unlike `buildall`, which leaves `rust/`
+  out by default.
+
 ## Running the Examples
 
 Run everything from `Examples/`. Build outputs land in the sibling `Examples.BUFA/` store (git-ignored).
@@ -57,6 +72,13 @@ bufa java              # downloads + unpacks the JDK once, then javac + java und
 bufa go                # same with the Go distribution: go build, then the binary
 bufa clj               # same with the Clojure CLI, on the same JDK; first run fetches Clojure from Maven
 bufa rust              # same with rustc + cargo: cargo build, then the binary; needs a linker installed
+```
+
+### Build Everything with One Aggregator
+
+```shell
+bufa hello/all  # every hello/* unit, in one invocation
+bufa all        # the same plus java, clj, go, and rust; needs a linker installed
 ```
 
 ### Build Everything with a `buildall` Script

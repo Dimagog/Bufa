@@ -101,28 +101,33 @@ func TestExamples_HelloUnits(t *testing.T) {
 
 	for _, cfgPath := range configs {
 		unit := strings.TrimSuffix(filepath.Base(cfgPath), Store.VirtualConfigSuffix)
-		t.Run(unit, func(t *testing.T) {
-			dir := filepath.Join("hello", unit)
-			// The one legitimate skip (hello/powershell off Windows), hence before failIfSkipped.
-			if !p.hasPlatformCmd(dir) {
-				t.Skip(dir + " is unavailable on this platform")
-			}
-			failIfSkipped(t)
-			provider := p.shellProviderOf(dir)
-			reason := p.unavailable(dir, "hello/"+unit)
-			if reason == "" {
-				reason = p.shellProviderUnavailable(provider, "hello/"+unit)
-			}
-			if reason != "" {
-				t.Skip(reason)
-			}
-			key := p.b.Build(dir)
-			hello := p.output(key, "hello.txt")
-			dirTxt := p.output(key, "dir.txt")
-			if want := "hello from " + filepath.Base(provider); hello != want || dirTxt != dir {
-				t.Errorf("hello.txt = %q (want %q), dir.txt = %q (want %q)", hello, want, dirTxt, dir)
-			}
-		})
+		dir := filepath.Join("hello", unit)
+		// hello/all is a scriptless aggregator: no shell, no hello.txt.
+		if !p.b.getBuildConfig(dir).Cmd.Disabled {
+			t.Run(unit, func(t *testing.T) { p.testHelloUnit(t, unit, dir) })
+		}
+	}
+}
+
+func (p examplesProject) testHelloUnit(t *testing.T, unit, dir string) {
+	// The one legitimate skip (hello/powershell off Windows), hence before failIfSkipped.
+	if !p.hasPlatformCmd(dir) {
+		t.Skip(dir + " is unavailable on this platform")
+	}
+	failIfSkipped(t)
+	provider := p.shellProviderOf(dir)
+	reason := p.unavailable(dir, "hello/"+unit)
+	if reason == "" {
+		reason = p.shellProviderUnavailable(provider, "hello/"+unit)
+	}
+	if reason != "" {
+		t.Skip(reason)
+	}
+	key := p.b.Build(dir)
+	hello := p.output(key, "hello.txt")
+	dirTxt := p.output(key, "dir.txt")
+	if want := "hello from " + filepath.Base(provider); hello != want || dirTxt != dir {
+		t.Errorf("hello.txt = %q (want %q), dir.txt = %q (want %q)", hello, want, dirTxt, dir)
 	}
 }
 

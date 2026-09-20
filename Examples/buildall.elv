@@ -14,8 +14,8 @@ fn build {|@a|
 
 for cfg [hello/*.BUFA] {
   var unit = (str:trim-suffix (path:base $cfg) .BUFA)
-  # hello/powershell has a [windows] cmd only
-  if (or $platform:is-windows (not-eq $unit powershell)) {
+  # hello/powershell has a [windows] cmd only; hello/all aggregates these same units
+  if (and (not-eq $unit all) (or $platform:is-windows (not-eq $unit powershell))) {
     build /hello/$unit $@args
   }
 }

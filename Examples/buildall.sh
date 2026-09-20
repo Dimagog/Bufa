@@ -12,8 +12,8 @@ build() {
 
 for cfg in hello/*.BUFA; do
   unit=$(basename "$cfg" .BUFA)
-  # hello/powershell has a [windows] cmd only
-  if [ "$unit" != powershell ]; then
+  # hello/powershell has a [windows] cmd only; hello/all aggregates these same units
+  if [ "$unit" != powershell ] && [ "$unit" != all ]; then
     build "hello/$unit" "$@"
   fi
 done

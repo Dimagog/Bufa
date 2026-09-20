@@ -1,0 +1,9 @@
+cmd = false
+
+deps.bld = [
+    "/hello/all",
+    "/java",
+    "/clj",
+    "/go",
+    "/rust",
+]
