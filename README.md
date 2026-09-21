@@ -386,7 +386,8 @@ parent/
 
 > [!NOTE]
 > The build store does not have to sit beside the project: set ['$BUFA_BUILD_ROOT'](Doc/Reference.md#read-by-bufa)
-> in Bufa's environment and it lands at `$BUFA_BUILD_ROOT/<project>.BUFA` instead.
+> in Bufa's environment and it lands at `$BUFA_BUILD_ROOT/<project path>.BUFA` instead (the project's full path
+> flattened into one name, e.g. `C_Src_Proj.BUFA`).
 
 ### Virtual Dirs
 

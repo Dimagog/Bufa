@@ -70,7 +70,7 @@ func TestPrepare_EnvOverride(t *testing.T) {
 
 	rc := PrepareConfig(true, false, false, io.Discard)
 
-	wantBld := filepath.Join(altBld, filepath.Base(root)+".BUFA")
+	wantBld := filepath.Join(altBld, flatBldRootName(rc.SrcRoot))
 	if rc.BldRoot != wantBld {
 		t.Errorf("BUFA_BUILD_ROOT not honored: bldRoot=%q, want %q", rc.BldRoot, wantBld)
 	}
@@ -155,6 +155,31 @@ func TestBuildResultDir(t *testing.T) {
 	}
 }
 
+func TestFlatBldRootName(t *testing.T) {
+	cases := []struct{ srcRoot, want string }{
+		{`C:\Src\Proj`, "C_Src_Proj.BUFA"},
+		{`C:\`, "C_.BUFA"},
+		{"C:/Src", "C_Src.BUFA"},
+		{`\\srv\share\proj`, "__srv_share_proj.BUFA"},
+		{"/home/u/proj", "_home_u_proj.BUFA"},
+		{"/", "_.BUFA"},
+	}
+	for _, tc := range cases {
+		if got := flatBldRootName(tc.srcRoot); got != tc.want {
+			t.Errorf("flatBldRootName(%q)=%q, want %q", tc.srcRoot, got, tc.want)
+		}
+	}
+}
+
+func TestDefaultBldRoot_EnvDistinguishesSameBase(t *testing.T) {
+	t.Setenv("BUFA_BUILD_ROOT", t.TempDir())
+	a := defaultBldRoot(filepath.Join(t.TempDir(), "proj"))
+	b := defaultBldRoot(filepath.Join(t.TempDir(), "proj"))
+	if a == b {
+		t.Errorf("same-base source roots collide on build root %q", a)
+	}
+}
+
 func TestDefaultBldRoot_DriveRootDemandsEnv(t *testing.T) {
 	// filepath.Dir(x) == x at the filesystem/drive root — the only condition the degenerate case fires on.
 	var driveRoot string
@@ -170,10 +195,9 @@ func TestDefaultBldRoot_DriveRootDemandsEnv(t *testing.T) {
 	env := t.TempDir()
 	t.Setenv("BUFA_BUILD_ROOT", env)
 	got := defaultBldRoot(driveRoot)
-	want := filepath.Join(env, Store.BuildRootDirSuffix)
+	want := filepath.Join(env, flatBldRootName(driveRoot))
 	if got != want {
-		t.Errorf("defaultBldRoot(%q)=%q, want %q (bare %s under $BUFA_BUILD_ROOT)",
-			driveRoot, got, want, Store.BuildRootDirSuffix)
+		t.Errorf("defaultBldRoot(%q)=%q, want %q", driveRoot, got, want)
 	}
 
 	t.Setenv("BUFA_BUILD_ROOT", "")

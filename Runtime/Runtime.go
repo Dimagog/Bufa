@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	vfs "github.com/spf13/afero"
@@ -218,18 +219,20 @@ func prepareBaseConfig(noDaemon, writableSrc bool, out io.Writer) (Config, strin
 }
 
 func defaultBldRoot(srcRoot string) string {
-	parent := filepath.Dir(srcRoot)
-	name := ""
-	if parent != srcRoot {
-		name = filepath.Base(srcRoot)
-	}
-	name += Store.BuildRootDirSuffix
 	if env := os.Getenv("BUFA_BUILD_ROOT"); env != "" {
-		return filepath.Join(env, name)
+		return filepath.Join(env, flatBldRootName(srcRoot))
 	}
+	parent := filepath.Dir(srcRoot)
 	c.Require(parent != srcRoot,
-		"Source root '%s' is a filesystem root, so the '%s' build root cannot be its sibling; set $BUFA_BUILD_ROOT", srcRoot, name)
-	return filepath.Join(parent, name)
+		"Source root '%s' is a filesystem root, so the '%s' build root cannot be its sibling; set $BUFA_BUILD_ROOT",
+		srcRoot, Store.BuildRootDirSuffix)
+	return filepath.Join(parent, filepath.Base(srcRoot)+Store.BuildRootDirSuffix)
+}
+
+func flatBldRootName(srcRoot string) string {
+	// Replacer tries pairs in argument order, so the two-char volume separators must precede ":".
+	flat := strings.NewReplacer(`:\`, "_", ":/", "_", ":", "_", `\`, "_", "/", "_").Replace(srcRoot)
+	return flat + Store.BuildRootDirSuffix
 }
 
 func findSrcRoot(startDir string, daemonDisabled bool, out io.Writer) (string, bool, bool) {

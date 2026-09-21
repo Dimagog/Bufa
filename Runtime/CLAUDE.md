@@ -41,9 +41,14 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   builds the FS pair, sets `DaemonDisabled = noDaemon || $BUFA_NO_DAEMON != ""` (**the only place prod code reads
   `BUFA_NO_DAEMON`**), and does **not** MkdirAll bldRoot (deferred to whoever needs it, keeping the hot path
   FS-free). `NewTest(srcFS, bldFS, srcRoot, bldRoot, out, daemonDisabled)` is the test-only fs-injection seam.
-- `defaultBldRoot`: **sibling** `<base>.BUFA` next to SrcRoot; `$BUFA_BUILD_ROOT` ⇒ `<env>/<base>.BUFA`. A SrcRoot at
-  a drive/fs root (no sibling possible) is a **hard error demanding `$BUFA_BUILD_ROOT`** (then the dir under `<env>`
-  is the bare `.BUFA`); a build root never lives inside the source tree.
+- `defaultBldRoot`: **sibling** `<base>.BUFA` next to SrcRoot; `$BUFA_BUILD_ROOT` ⇒ `<env>/<flat>.BUFA`, where
+  `<flat>` (`flatBldRootName`) is the **whole** SrcRoot with `:\`/`:/` → one `_` and every remaining `:`, `\`, `/`
+  → `_` (`C:\Src\Proj` → `C_Src_Proj.BUFA`, `/home/u/proj` → `_home_u_proj.BUFA`) — one shared `<env>`
+  hosts many projects, so the base alone collides; the sibling form is unique by placement and keeps the short
+  name. Same rules on every OS; deliberately lossy (`a_b` vs `a\b` collide), not a bijection, and casing is
+  SrcRoot's as resolved. A SrcRoot at a drive/fs root (no sibling possible) is a **hard error demanding
+  `$BUFA_BUILD_ROOT`** (then the dir under `<env>` is `C_.BUFA` / `_.BUFA`); a build root never lives inside the
+  source tree.
 - `findSrcRoot` queries `NameServer.GetSrcRoot` first (zero FS; a hit is trusted as **anchored** — only anchored
   resolutions are ever written back); on miss `walkForSrcRoot` makes **one upward walk** with marker precedence:
   nearest `.BUFA` marker (the walk stops there) > nearest `.git` entry (dir **or** file, `UnsafeIO.OSDirEntryExists`)

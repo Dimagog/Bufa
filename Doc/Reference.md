@@ -411,10 +411,13 @@ matches the name case-insensitively._
 
 Set these in the environment `bufa` runs in:
 
-* **`BUFA_BUILD_ROOT`** — puts the build store at `$BUFA_BUILD_ROOT/<project>.BUFA` instead of beside the project.
-  Allows hosting build store farther away from source, or on faster storage.
+* **`BUFA_BUILD_ROOT`** — puts the build store at `$BUFA_BUILD_ROOT/<project path>.BUFA` instead of beside the
+  project. Allows hosting build store farther away from source, or on faster storage.
+  `<project path>` is the project root's full path flattened into one name, so projects sharing a last directory
+  name never share a store: `:\` becomes one `_`, and every other `:`, `\`, and `/` becomes `_` —
+  `C:\Src\Proj` ⇒ `C_Src_Proj.BUFA`, `/home/me/proj` ⇒ `_home_me_proj.BUFA`.
   Required (must be set) when the project root is a filesystem root, where no sibling can exist (the store is then
-  `$BUFA_BUILD_ROOT/.BUFA`).
+  `$BUFA_BUILD_ROOT/C_.BUFA`, or `_.BUFA` for `/`).
 * **`BUFA_NO_DAEMON`** — any non-empty value: never start or use the watcher daemon, like `--no-daemon` on every
   command. `bufa nuke` still stops a running daemon before deleting the store.
 * **`BUFA_GLOBAL_CACHE_DIR`** — the parent dir of the global `[[deps.ext]]` artifact cache, which is always its

@@ -161,8 +161,9 @@ Everything else goes. Explicitly:
 - [Runtime](Runtime/CLAUDE.md) — invocation-wide `Config`: srcRoot discovery (NameServer-first, then one walk with
   marker precedence `.BUFA` > nearest `.git` > topmost `BUFA`; anchored-only NS
   back-fill, the split-roots hard error, the kind-tagged `Src root:` line), config-absent `.BUFA`-marker defaults,
-  the sibling `<base>.BUFA` build root (an fs-root source demands `$BUFA_BUILD_ROOT`),
-  `$BUFA_BUILD_ROOT`/`$BUFA_NO_DAEMON`, the RO-src FS that still forwards
+  the sibling `<base>.BUFA` build root (an fs-root source demands `$BUFA_BUILD_ROOT`) vs the whole-path
+  `<flat>.BUFA` name under `$BUFA_BUILD_ROOT` and its flattening rules, `$BUFA_NO_DAEMON`, the RO-src FS that
+  still forwards
   `RealPath`, the `ShowOutput`/`ForceRebuild`/`BuildMode`/`TargetDirs` per-dir policies + the shell's `In` (which the
   CLI assigns post-`Prepare*`; `ForceRebuildFor` is also true for the shell target; `BuildMode`, not `Shell` — which
   shell is BuildConfig's key),
