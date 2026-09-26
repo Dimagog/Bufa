@@ -30,6 +30,8 @@ const (
 	urlLinkPrefix = "url-"
 )
 
+const cacheDirTagComment = "# bufa Global Artifact Cache: downloaded [[deps.ext]] artifacts, re-fetched on demand, safe to delete ('bufa nuke --global')"
+
 // Windows-forbidden filename chars → same-looking Unicode, so a url link's name IS the url.
 // Other OSes reserve a subset of these.
 var urlNameEncoder = strings.NewReplacer(
@@ -129,8 +131,8 @@ func (ac *Cache) fetch(url, expectedHash string, out io.Writer) {
 	defer resp.Body.Close()
 	c.Require(resp.StatusCode == http.StatusOK, "server answered '%s'", resp.Status)
 
-	// "." is the cache root itself — created here on first fetch.
-	c.Check(ac.fs.MkdirAll(".", 0o755))
+	// "." is the cache root itself — created (and tagged) here on first fetch.
+	Store.EnsureRootWithTag(ac.fs, cacheDirTagComment)
 	f := c.Check2(vfs.TempFile(ac.fs, ".", fetchPrefix+"*"))
 	tmpName := f.Name()
 	hasher := Hashing.NewFileHasher()
@@ -174,6 +176,7 @@ const (
 	kindUrlLink                       // symlink targeting an F<hash> name
 	kindFetchStaging                  // regular fetch-* file
 	kindUrlStaging                    // url-* symlink
+	kindCacheDirTag                   // regular CACHEDIR.TAG file, by name only
 )
 
 // The cache's ownership rule, shared by Nuke's refusal and Check. A url link is recognized by
@@ -192,6 +195,8 @@ func (ac *Cache) classify(e fs.FileInfo) (kind entryKind, linkTarget string) {
 			kind = kindFetchStaging
 		} else if Hashing.IsValidFileHash(name) {
 			kind = kindEntry
+		} else if strings.EqualFold(name, Store.CacheDirTagName) {
+			kind = kindCacheDirTag
 		}
 	}
 	return kind, linkTarget

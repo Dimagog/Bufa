@@ -4,6 +4,7 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
 
 - `cmd/bufa` — the one user-visible binary. See [bufa/CLAUDE.md](bufa/CLAUDE.md).
 - `cmd/daemon` — dual-mode reference binary for the `Daemon` transport. See [../Daemon/CLAUDE.md](../Daemon/CLAUDE.md).
+  Client mode creates the sock dir in `Connect`'s `beforeSpawn`; daemon mode only writes its pid file there.
 - `cmd/daemon-client <sockPath> {GetSrcHash <path> | SetSrcHash <path> <hash>}` — one Watcher RPC against an
   already-running daemon (no spawn; missing socket = error). Prints `GetSrcHash('<path>'): '<hash>'` /
   `SetSrcHash('<path>')='<hash>'`.

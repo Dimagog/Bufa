@@ -129,7 +129,8 @@ Everything else goes. Explicitly:
   files of removed trees
   only, symlinks count 0; fix removes everything check reports, unexpected entries
   included — the build root's own top level too, judged by the one ownership predicate `Nuke`'s verify-then-delete
-  of the whole build root refuses on).
+  of the whole build root refuses on), and the `CACHEDIR.TAG` written once, when a root dir is born (Mkdir-detected,
+  never re-checked) — the build root's and the artifact cache's.
 - [ArtifactCache](ArtifactCache/CLAUDE.md) — global per-user cache of pinned `[[deps.ext]]` artifacts: the
   verify-at-insert / trust-on-hit admission gate, flat `F<hash>` entry naming (what lets a `large` link fold instead of
   stream), url links named by the look-alike-Unicode-encoded url text (overlong ⇒ trimmed + `_U<hash>` tail),
@@ -199,7 +200,8 @@ Everything else goes. Explicitly:
   the mode's output tree, `./`/bare/absolute `exe` resolution, definition-sourced `BUFA_COPY_OR_MOVE`, and the
   `Examples/` nu + pwsh + elvish + prefix-dev/shell providers.
 - [DaemonClient](DaemonClient/CLAUDE.md) — build-side wrapper over the Watcher RPC daemon: the nil-handle
-  degrade-to-miss/no-op rule, synchronous `Get` vs fire-and-forget `Set`, the `<bldRoot>/bufa-d.sock` convention, the
+  degrade-to-miss/no-op rule, synchronous `Get` vs fire-and-forget `Set`, the `<bldRoot>/bufa-d.sock` convention (and
+  the tagged build root `Connect`'s spawn hook creates for it), the
   Connect / Stop (no wait) / StopWait / Restart (both wait for sock cleanup) lifecycle and its callers, the
   NameServer-takeover
   trigger, the `GetRootConfig` version check with its in-place daemon restart, and why it takes Config primitives
@@ -216,8 +218,8 @@ Everything else goes. Explicitly:
   `Stop` client behind `bufa daemon stop/reset`.
 - [Daemon](Daemon/CLAUDE.md) — single-instance UDS RPC transport rules: the `<exe> --daemon <sockPath> …` self-spawn
   contract, what `alreadyRunning` means, listen-first/dial-probe stale-socket recovery plus the socket unlink on exit,
-  MkdirAll-before-Listen, the per-Accept idle deadline (traffic on open conns never resets it), and the tolerated
-  bind/listen orphan race.
+  the `beforeSpawn` hook (`Serve` never creates the sock dir), the per-Accept idle deadline (traffic on open conns
+  never resets it), and the tolerated bind/listen orphan race.
 - [internal/contract](internal/contract/CLAUDE.md) — panic-based `Require`/`Assert`/`Check*`/`Error*` plus the
   `Catch`/`Rescue` bridge back to `error`: the `With(…).Check2(…)` two-call shape and why, the `"%s\n%w"` context
   wrapping that makes every CLI's error output multi-line, the pre-panic Error log and its level gate, and the

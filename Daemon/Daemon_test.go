@@ -3,7 +3,6 @@ package Daemon
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"net/rpc"
 	"os"
 	"os/exec"
@@ -149,36 +148,35 @@ func TestStaleSocket(t *testing.T) {
 	}
 }
 
+// The spawning client's beforeSpawn creates the sock dir; Serve itself never does.
 func TestMissingSockDir(t *testing.T) {
 	dir, _ := sockIn(t)
 	sock := filepath.Join(dir, "d", "s")
 
-	const idle = 200 * time.Millisecond
-	done := make(chan error, 1)
-	go func() {
-		done <- c.Rescue(func() {
-			Serve(sock, idle, func(*rpc.Server, func()) {})
-		})
-	}()
-
-	if !PollUntil(2*time.Second, func() bool {
-		c, err := net.Dial("unix", sock)
-		if err != nil {
-			return false
-		}
-		c.Close()
-		return true
-	}) {
-		t.Fatal("Serve did not start listening")
+	out, err := runClient(sock, "")
+	if err != nil {
+		t.Fatalf("client: %v\n%s", err, out)
 	}
+	if !bytes.Contains(out, []byte("sum: 5")) {
+		t.Fatalf("expected 'sum: 5', got: %q", out)
+	}
+	if _, err := os.Stat(filepath.Dir(sock)); err != nil {
+		t.Fatalf("beforeSpawn must have created the sock dir: %v", err)
+	}
+}
 
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("Serve panicked: %v", err)
-		}
-	case <-time.After(idle + 2*time.Second):
-		t.Fatal("Serve did not exit within idle + slack")
+func TestServe_MissingSockDirFails(t *testing.T) {
+	dir, _ := sockIn(t)
+	sock := filepath.Join(dir, "d", "s")
+
+	err := c.Rescue(func() {
+		Serve(sock, time.Second, func(*rpc.Server, func()) {})
+	})
+	if err == nil {
+		t.Fatal("Serve on a missing sock dir must fail, not create it")
+	}
+	if _, err := os.Stat(filepath.Dir(sock)); !os.IsNotExist(err) {
+		t.Fatalf("Serve must not create the sock dir, Stat err = %v", err)
 	}
 }
 
@@ -201,7 +199,8 @@ func TestIdleShutdown(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	conn, _ := Connect(sock)
+	noSpawn := func() { t.Error("beforeSpawn must not run when a daemon answers") }
+	conn, _ := Connect(sock, noSpawn)
 	conn.Close()
 
 	select {

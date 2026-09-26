@@ -3,7 +3,8 @@
 Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
 
 - Content-addressed directory store over one `vfs.Fs` (Build's `BldFS`): `Store.go`, the `bufa gc` collector
-  `GC.go`, the `bufa check` verifier `Check.go`, `Nuke.go`. Public API: `NewStore(fs)`, `Contains(root, hash)`,
+  `GC.go`, the `bufa check` verifier `Check.go`, `Nuke.go`, `CacheDirTag.go` (**Cache dir tag**). Public API:
+  `NewStore(fs)`, `Contains(root, hash)`,
   `GetLinkTarget(root, name)` (`""` = absent/not-symlink), `Link(root, name, hash) prev` (creates, reads-then-skips
   when current, **re-points** when the target differs — a `B` key follows its latest publish — and returns the
   previous target so Build can report a re-point), `LinkPath(root, path, hash)` (`Link` on the encoded `∕<path>`
@@ -25,8 +26,10 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   `bufaSuffixed`, skipNested's prune rule), `ShellDefFileName` = `BUFA.shell` and `EnvFileName` = `BUFA.env`
   (deliberately **not** reserved: each must stage and publish like any source file), `Nuke(bldRoot, allowedFiles…)`
   (`RemoveAll` the whole build root only after `ownedTopLevel(allowedFiles)` admits every entry — the six
-  `layoutRoots` as directories plus the case-folded `allowedFiles` as non-directories (cmd/bufa passes the daemon
-  sock name; a failed build's script lives inside `tmp/`); anything else refuses naming the offenders, dirs with a
+  `layoutRoots` as directories plus the case-folded `allowedFiles`, with `CacheDirTagName` appended inside, as
+  non-directories (cmd/bufa passes the daemon sock name; a failed build's script lives inside `tmp/`); anything else
+  refuses
+  naming the offenders, dirs with a
   trailing `/`; missing root ⇒ no-op; the caller stops the daemon **and waits** first),
   `NukeDir(friendlyName, dir, owned)` (the verify-then-delete engine on an OS path, I/O through a throwaway
   `BasePathFs`; ArtifactCache's `Nuke` reuses it), `CopyFileIn(srcFs, srcPath, dstPath)` (one regular file in,
@@ -72,6 +75,19 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   `vfsx.RemoveAllUnder` (the dir and its `∕` link stay), `∕` links are skipped, foreign names are reported
   (`UNEXPECTED ENTRY: 'user/<name>' left untouched (run 'bufa check' to inspect)`) and left — no refusal, unlike
   `Nuke`. Missing `user/` ⇒ 0.
+- **Cache dir tag** (`CacheDirTag.go`): `EnsureRootWithTag(fsys, tagComment)` creates `fsys`'s root dir and writes
+  `CACHEDIR.TAG` (`CacheDirTagName`: the Cache Directory Tagging Specification's signature line + one `#` comment
+  line) **iff this call created the dir** — `Mkdir(".")`: `ErrExist` ⇒ nothing; `ErrNotExist` ⇒ the container above
+  is missing too, `MkdirAll` then tag. So exactly one of several racing creators tags, and a MemMapFs root (always
+  present) is never tagged. The tag is **never** checked, validated, or restored afterwards: a deleted tag stays
+  gone until the dir is recreated, `check` admits the name and reads nothing, and a root an older bufa created
+  stays untagged until nuked. The build root's comment is supplied by `EnsureBuildRootAt(bldRoot)` (OS path, rooted
+  like `Nuke`; DaemonClient's spawn hook) and by the `Store` method `MakeBuildSubdir(dir)` — the **only** way a
+  build subdir comes to exist: root first (`ensureBuildRoot`, memoized per `Store` in `rootEnsured`), then
+  `MkdirAll(dir)`. Every `MkdirAll` under the build root goes through it — this package's, Build's `tmp/`, and
+  `symlinkAt`'s link parent (`osSymlink`'s own parent `MkdirAll` would otherwise mint the root untagged).
+  ArtifactCache passes its own comment. Backup tools honoring the tag (restic, borg, `tar --exclude-caches`, kopia)
+  then skip both roots.
 - Virtual-config bijection, owned here: `VirtualConfigPathForDir(srcDir)` (`""` only at the source root) and
   `VirtualSuffix(name)` (`""` for a name without the suffix — bare `BUFA` is shorter — and for bare `.BUFA`; a real
   suffix is never empty). Shared by Build's `locateBuildConfig`, gc, and Watcher so encode and decode can't drift.
@@ -136,8 +152,9 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   and skip hashes are never measured. Anything wrongly collected is re-staged/re-built next build.
 - **Check** (`Check(out, fix, allowedFiles…) CheckStats`): read-only unless `fix`; one `checkContext` (store, fix,
   out, stats) whose methods carry mode, writer, and counters. `checkTopLevel` judges the build root's own listing by
-  `ownedTopLevel(allowedFiles)` — the very predicate `Nuke` refuses on (cmd/bufa passes the same sock name) — so a
-  stray `target/` beside `in/` is `UnexpectedEntries`; the layout roots' contents are the later passes' (`bld/`,
+  `ownedTopLevel(allowedFiles)` — the very predicate `Nuke` refuses on (cmd/bufa passes the same sock name; the
+  cache dir tag is admitted by name, its content never read, its absence never reported) — so a stray `target/`
+  beside `in/` is `UnexpectedEntries`; the layout roots' contents are the later passes' (`bld/`,
   `tmp/`, `dirty/` never entered). `checkContentRoot` over `in/` then `out/`: content by full `IsValidDirHash` shape,
   `out/` build links by `IsValidBuildHash` (exactly gc's classification — a prefixed non-key is `UnexpectedEntries`,
   never corrupt content). Pass 1 resolves every `∕` (and out/'s `B`) link against the enumeration, no extra FS ops
@@ -178,7 +195,12 @@ Each binds this package to another; changing either side breaks the other with n
   the `user/∕` link decodes through gc's shared `srcPresent`, and the exported `P…` value is a pure function of that
   path. `ShellDefFileName` and `EnvFileName` must stay **outside** `IsReservedName`: Build's `srcFiltersOverride` and
   `cleanLocalName` lean on it, so reserving either would silently drop a provider's definition or env exports from
-  its own staged source (an absent `BUFA.env` is a legal no-op).
+  its own staged source (an absent `BUFA.env` is a legal no-op). Build's own build-root dirs (`tmp/`) are made
+  through `MakeBuildSubdir`, never `BldFS.MkdirAll`: in a daemon-less run that method is what births the tagged
+  root, and a bare `MkdirAll` under the root ahead of it mints an untagged one.
+- [DaemonClient](../DaemonClient/CLAUDE.md) — in daemon mode the build root is born in `Connect`'s `beforeSpawn`
+  (`EnsureBuildRootAt`), before the spawned daemon binds its sock inside it; `MakeBuildSubdir` then finds it
+  present. `Daemon.Serve` no longer creates the dir, so a spawn without the hook dies on Listen.
 - [Watcher](../Watcher/CLAUDE.md) — inside the daemon, config existence probes must be the **silent**
   `UnsafeIO.OSFileExists`, never the panicking `OSConfigExists`/`VFSConfigExists`: a directory squatting on
   `BUFA`/`.BUFA` would kill the event loop instead of being reported by the build side. `out/∕<dir>` and
@@ -191,6 +213,8 @@ Each binds this package to another; changing either side breaks the other with n
   targets as durable. The two deletes that break it are user-requested: `nuke --global`, and `bufa check --fix`
   removing a **corrupt** cache entry — `Check` streams through the link under `SafeHashing`, so a tree linking to
   that entry reports `CorruptContent` in the same run (mismatch if this half runs first, dangling if second).
+  `EnsureRootWithTag` is the shared root creator; `classify` must keep admitting `CacheDirTagName`, or
+  `nuke --global` refuses on every cache bufa itself tagged.
 - [Runtime](../Runtime/CLAUDE.md) — every symlink op hard-requires `s.fs` to resolve `RealPath`, and vfsx's
   `CopyFileW` engine requires the source fs to forward it. Runtime builds the FS pair, so wrapping `BldFS` or the src
   half in any afero decorator that hides `RealPath` panics inside Store on every link and OS copy.

@@ -44,6 +44,11 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   `[filters].bld` is empty (MoveStore deletes nothing and keeps empty dirs, hidden files included), else
   `FilterFiles.Compile(rules)` — no hidden-files default. `fetchBuildConfig` asserts a daemon-hit config has a
   non-empty `Hash`; `mergeKnownHashes` folds the bundled src hashes into `localSrcCache`.
+- **Build root birth**: every dir under the build root is made by `Store.MakeBuildSubdir`, which creates and tags
+  `<root>.BUFA` first (memoized per `Store`) — Store's staging/publish dirs and this package's `tmp/` alike; a bare
+  `BldFS.MkdirAll` would mint the root untagged in a daemon-less run (`$BUFA_NO_DAEMON`, failed spawn). In daemon
+  mode `DaemonClient.Connect`'s spawn hook already created it and the first call costs one `Mkdir` ⇒ `ErrExist`.
+  The hot path never writes, so never pays.
 - **Zero-FS hot path**: a repeat safe build with a populated Watcher cache does no FS I/O — config, src hashes, and
   `combined → buildHash` are daemon-served. The `out/∕<srcDir>` GC root stays current without touching the hot path:
   `daemon.GetBuildHash` also returns `PathBuildHashCurrent` (the `pathBuildHashCache` shadow), and `build()` writes
@@ -206,8 +211,8 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   bufa's links and the post-build recompute surfaces what it didn't heal. **Heal-skip**: when placement changed the
   tree, `realDirtyBuild` recomputes the dirty hash and re-checks the disk skip hash — a match returns WITHOUT running
   the script (placement is bufa's bookkeeping, not user change). Script: cwd = the real dir, script at
-  `<bldRoot>/tmp/` by absolute path (`runDirtyBuildScript`'s `MkdirAll(tmp/)` creates the build root; removed on
-  success), env inherited verbatim + `setBufaEnv` with the mode's values — `BUFA_BUILD_ROOT`=**source root**,
+  `<bldRoot>/tmp/` by absolute path (`runDirtyBuildScript`'s `MkdirAll(tmp/)`; removed on success), env inherited
+  verbatim + `setBufaEnv` with the mode's values — `BUFA_BUILD_ROOT`=**source root**,
   `BUFA_CACHE_ROOT`=`<bldRoot>/user`, `BUFA_COPY_OR_MOVE`=`copy` (deps are the real source tree) — then
   `BUFA_CACHE_DIR` (the identical `P…` name; outside the watched tree, so never in the dirty hash) and
   `setAllEnvVars`. **Forced rebuild**: both skip-hash getters → `alwaysMiss` (neither the stored hash nor the
@@ -335,3 +340,7 @@ Each binds this package to another; changing either side breaks the other with n
   **top level** makes a post-failure `nuke` refuse and `check` report it. `runInteractiveShell` reads stdin from
   `rc.In`, which only cmd/bufa's `buildMain` assigns — a nil `In` is a legal EOF stdin, so a path that forgets it
   gets a shell that opens and exits at once, with no error.
+- [DaemonClient](../DaemonClient/CLAUDE.md) — the build root has two creators, both tagging it: `Connect`'s spawn
+  hook (daemon mode) and `Store.MakeBuildSubdir` (daemon-less). Neither checks the tag afterwards, so a
+  `BldFS.MkdirAll`/`WriteFile` under the root that bypasses `MakeBuildSubdir` mints an untagged root in daemon-less
+  runs.

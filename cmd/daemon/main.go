@@ -78,8 +78,7 @@ func run(args []string, _ io.Reader, out, errOut io.Writer) (err error) {
 }
 
 func daemonMain(sockPath string, idle time.Duration) {
-	// The pid file lands beside the socket and is written before Serve creates the dir.
-	c.Check(os.MkdirAll(filepath.Dir(sockPath), 0o755))
+	// The pid file lands beside the socket, in the dir the spawning client created.
 	pidPath := filepath.Join(filepath.Dir(sockPath),
 		fmt.Sprintf("daemon-%d.pid", os.Getpid()))
 	c.Check(os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o644))
@@ -89,7 +88,8 @@ func daemonMain(sockPath string, idle time.Duration) {
 }
 
 func clientMain(out io.Writer, sockPath string, daemonArgs []string) {
-	conn, _ := Daemon.Connect(sockPath, daemonArgs...)
+	mkSockDir := func() { c.Check(os.MkdirAll(filepath.Dir(sockPath), 0o755)) }
+	conn, _ := Daemon.Connect(sockPath, mkSockDir, daemonArgs...)
 	c.Require(conn != nil, "spawned daemon did not start listening on %s", sockPath)
 	defer conn.Close()
 

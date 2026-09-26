@@ -20,7 +20,9 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   `NukeDir`'s `RemoveAll` clears the read-only attribute on Windows, so the insert-time chmod needs no separate
   pass), `Check(out, fix) CheckStats` (**Check**). Entry names are their verified content hash, so hash walks fold
   a cache link's target basename instead of streaming the referent (Hashing's trusted-link shortcut).
-- Layout: `F<hash>` verified files; `<encoded url>` → `F<hash>` **url links** (`urlLinkName`: the url text with
+- Layout: `CACHEDIR.TAG` at the root (`Store.EnsureRootWithTag` with this package's comment, written only when the
+  first fetch **creates** the dir — never re-checked; Store's **Cache dir tag**); `F<hash>` verified files;
+  `<encoded url>` → `F<hash>` **url links** (`urlLinkName`: the url text with
   Windows-forbidden filename chars swapped for look-alike Unicode — `/`→`∕`, `:`→`꞉`, `?`→`？`, …; an encoding
   exceeding `maxUrlNameLen` is trimmed at a rune boundary with `_U<hash(url)>` (`Hashing.HashUrl`) replacing the
   tail, so name + staging wrapper stay under every FS's 255-byte cap; on a case-insensitive FS two urls differing
@@ -44,8 +46,9 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   admit-then-fail printing the hash — never auto-trust silently. A real download prints `Downloading <url>` to `out`
   regardless of log level.
 - **Ownership** (`classify(info) (entryKind, linkTarget)`): the one rule for "bufa wrote this", shared by `Nuke`'s
-  refusal and `Check` so they can't drift — a regular `fetch-*` file (`kindFetchStaging`) or `F<hash>` file
-  (`kindEntry`); a `url-*` symlink (`kindUrlStaging`) or a symlink whose raw target is an `F` key (`kindUrlLink`,
+  refusal and `Check` so they can't drift — a regular `fetch-*` file (`kindFetchStaging`), `F<hash>` file
+  (`kindEntry`), or `CACHEDIR.TAG` (`kindCacheDirTag`, by case-folded name, content never read — Check has no case
+  for it); a `url-*` symlink (`kindUrlStaging`) or a symlink whose raw target is an `F` key (`kindUrlLink`,
   one `Readlink`, returned so Check never reads it twice); everything else — dirs (an `F`-named one included),
   other names, symlinks with any other target — is `kindForeign`.
 - **Check** (`Check.go`, `bufa check`'s cache half; read-only unless `fix`): one `ReadDir` of the cache root,
@@ -86,7 +89,8 @@ Each binds this package to another; changing either side breaks the other with n
   until their next fetch + rebuild (a dangling link is a hard error in hash walks, so `bufa check` reports it rather
   than serving it). `Check`'s `fix` does the same to one **corrupt** entry: `Store.Check` streams through the link
   (`SafeHashing`), so the trees linking to it report corrupt in the same `bufa check` run, whichever half runs
-  first. Partial eviction remains forbidden.
+  first. Partial eviction remains forbidden. The root's `CACHEDIR.TAG` comes from `Store.EnsureRootWithTag`, whose
+  Mkdir-based create-detection is what keeps concurrent first fetchers from each writing a tag.
 - [Hashing](../Hashing/CLAUDE.md) — url links are named by `urlLinkName`'s encoded url text, owned here; `HashUrl`
   supplies only the `_U<hash(url)>` tail of trimmed overlong names. Entry names are `F<verified content hash>`,
   exactly the invariant the trusted-link shortcut rests on: a name that could ever be untruthful would fold into the

@@ -206,7 +206,7 @@ func (b *DirtyBuilder) realDirtyBuild(
 }
 
 func (b *DirtyBuilder) runDirtyBuildScript(srcDir string, cfg BuildConfig.BufaConfig, shell string, bldDeps []string) {
-	c.Check(b.BldFS.MkdirAll(Store.TmpRoot, 0o755))
+	b.store.MakeBuildSubdir(Store.TmpRoot)
 	shellDef := b.loadShellDef(shell)
 	env := newEnv(os.Environ())
 	b.setBufaEnv(env, b.SrcRoot, srcDir, shellDef.Copy)

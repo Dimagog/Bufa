@@ -14,6 +14,7 @@ import (
 	"github.com/dimagog/bufa"
 	"github.com/dimagog/bufa/BuildConfig"
 	"github.com/dimagog/bufa/Daemon"
+	"github.com/dimagog/bufa/Store"
 	"github.com/dimagog/bufa/Watcher"
 	"github.com/dimagog/bufa/internal/Util"
 	c "github.com/dimagog/bufa/internal/contract"
@@ -42,7 +43,8 @@ func Connect(bldRoot, srcRoot string, daemonDisabled, nsAlive bool, out io.Write
 		return &Client{}
 	}
 
-	conn, alreadyRunning := Daemon.Connect(sockPath, srcRoot)
+	mkBldRoot := func() { Store.EnsureBuildRootAt(bldRoot) }
+	conn, alreadyRunning := Daemon.Connect(sockPath, mkBldRoot, srcRoot)
 	if conn == nil {
 		slog.Warn("Watcher daemon did not start; hashing uncached", "sockPath", sockPath)
 		return &Client{}

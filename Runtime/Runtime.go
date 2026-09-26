@@ -195,8 +195,8 @@ func prepareBaseConfig(noDaemon, writableSrc bool, out io.Writer) (Config, strin
 	srcRoot, anchored, nsAlive := findSrcRoot(startDir, daemonDisabled, out)
 	bldRoot := defaultBldRoot(srcRoot)
 
-	// bldRoot creation is deferred to whoever needs it: the fully-cached hot path never touches it,
-	// so a MkdirAll here would be a wasted Stat per invocation.
+	// bldRoot creation is deferred to the daemon spawn or Store.MakeBuildSubdir: the fully-cached hot
+	// path never touches it, so a MkdirAll here would be a wasted Stat per invocation.
 	osFs := vfs.NewOsFs()
 	srcFS := vfs.NewBasePathFs(osFs, srcRoot)
 	// Dirty builds write the source tree for real, so they get the bare writable fs.

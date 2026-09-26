@@ -39,8 +39,10 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   starts at **cwd**, always (cmd/bufa's `--start-dir` is a real chdir; a build target never reaches Runtime). It
   prints `Src root: <srcRoot> (<kind>)` — `cached` (NS hit), `.BUFA`, `.git`, or `topmost BUFA, never cached` —
   builds the FS pair, sets `DaemonDisabled = noDaemon || $BUFA_NO_DAEMON != ""` (**the only place prod code reads
-  `BUFA_NO_DAEMON`**), and does **not** MkdirAll bldRoot (deferred to whoever needs it, keeping the hot path
-  FS-free). `NewTest(srcFS, bldFS, srcRoot, bldRoot, out, daemonDisabled)` is the test-only fs-injection seam.
+  `BUFA_NO_DAEMON`**), and does **not** MkdirAll bldRoot — it is born in `DaemonClient.Connect`'s spawn hook or in
+  `Store.MakeBuildSubdir`, both tagging it `CACHEDIR.TAG`; an eager mkdir here would cost the hot path a Stat and
+  mint an untagged root. `NewTest(srcFS, bldFS, srcRoot, bldRoot, out, daemonDisabled)` is the test-only
+  fs-injection seam.
 - `defaultBldRoot`: **sibling** `<base>.BUFA` next to SrcRoot; `$BUFA_BUILD_ROOT` ⇒ `<env>/<flat>.BUFA`, where
   `<flat>` (`flatBldRootName`) is the **whole** SrcRoot with `:\`/`:/` → one `_` and every remaining `:`, `\`, `/`
   → `_` (`C:\Src\Proj` → `C_Src_Proj.BUFA`, `/home/u/proj` → `_home_u_proj.BUFA`) — one shared `<env>`

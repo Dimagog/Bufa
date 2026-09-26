@@ -4,13 +4,17 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
 
 - Type `Client` — the build-side wrapper over the Watcher RPC daemon (distinct from the `Daemon` transport). Holds a
   `*rpc.Client` that is **nil when the daemon is disabled/unreachable**; every method nil-checks it and returns a
-  miss/no-op, so callers never nil-check. Imports `BuildConfig`+`Daemon`+`Watcher`+`Util` but **not `Runtime`** —
+  miss/no-op, so callers never nil-check. Imports `BuildConfig`+`Daemon`+`Store`+`Watcher`+`Util` but **not
+  `Runtime`** —
   the lifecycle funcs take Config primitives (build root, source root, disabled/nsAlive), keeping
   `Runtime`↔`DaemonClient` acyclic.
 - Lifecycle: `Connect(bldRoot, srcRoot, disabled, nsAlive, out)` derives the sock `<bldRoot>/bufa-d.sock` (exported
-  `SockName`; `""` when disabled), thin over `Daemon.Connect`; when that reports `alreadyRunning && !nsAlive`, it
-  fires `Watcher.TryStartNameServer` (NS takeover). It also stashes a `restartDaemon(msg)` closure (print `msg`,
-  then stop/wait/re-`Connect`) for the version-mismatch path. `Stop(bldRoot, disabled, out)` dials + sends
+  `SockName`; `""` when disabled), thin over `Daemon.Connect` with `Store.EnsureBuildRootAt(bldRoot)` as its
+  `beforeSpawn` — in daemon mode this is where the build root is born (tagged `CACHEDIR.TAG`), before the daemon
+  binds its sock inside it; a hit or a disabled daemon creates nothing (`Store.MakeBuildSubdir` does, daemon-less);
+  when `Daemon.Connect` reports `alreadyRunning && !nsAlive`, it fires `Watcher.TryStartNameServer` (NS takeover). It
+  also stashes a `restartDaemon(msg)` closure (print `msg`, then stop/wait/re-`Connect`) for the version-mismatch
+  path. `Stop(bldRoot, disabled, out)` dials + sends
   `Watcher.Shutdown` and returns **immediately** (the not-running path still removes a killed daemon's leftover
   sock), reporting "Daemon stopped" / "Daemon was not running" / disabled / failed — used by `gc`, `check`,
   `daemon stop`, and daemon-disabled dirty builds (which pass `disabled=false` so Stop reaches the sock). `Stop`
@@ -44,7 +48,12 @@ Each binds this package to another; changing either side breaks the other with n
 - [Daemon](../Daemon/CLAUDE.md) — `Serve`'s `defer os.Remove(sockPath)` is the only observable signal that a
   **live** daemon has exited, and `Restart` polls for it before the next `Connect`; dropping the unlink turns every
   `bufa daemon reset` into a timeout plus a colliding spawn. The killed-daemon leftover is `stop`'s job: its
-  not-running path removes it (its own dial just failed, so no live-probe needed).
+  not-running path removes it (its own dial just failed, so no live-probe needed). `Serve` never creates the sock
+  dir: `Connect`'s `beforeSpawn` must, or the spawned daemon dies on Listen and every invocation degrades to
+  uncached hashing.
+- [Store](../Store/CLAUDE.md) — `EnsureBuildRootAt` tags the root only when it creates it; the other creator is
+  `Store.MakeBuildSubdir`. An eager `MkdirAll` anywhere ahead of both (Runtime deliberately has none) mints an
+  untagged root that nothing ever tags.
 - [Cache](../Cache/CLAUDE.md) — returning `""` on a miss (and when disabled) is what lets these getters stack under
   `Cache.Wrap_Def`, whose miss marker is the zero value. A new hash RPC whose empty string is a legitimate value
   silently turns every hit into a miss.

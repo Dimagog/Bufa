@@ -58,7 +58,10 @@ const (
 	GitRootMarker = ".git"
 )
 
-type Store struct{ fs vfs.Fs }
+type Store struct {
+	fs          vfs.Fs
+	rootEnsured bool // MakeBuildSubdir's memo: the root check runs once per Store
+}
 
 func NewStore(fs vfs.Fs) *Store { return &Store{fs: fs} }
 
@@ -229,7 +232,7 @@ func (s *Store) GetDirtySkipHash(path string) string {
 }
 
 func (s *Store) SetDirtySkipHash(path, skipHash string) {
-	c.Check(s.fs.MkdirAll(DirtyRoot, 0o755))
+	s.MakeBuildSubdir(DirtyRoot)
 	name := filepath.Join(DirtyRoot, pathToLinkName(path))
 	slog.Info("SetDirtySkipHash", "path", name, "skipHash", skipHash)
 	c.Check(vfs.WriteFile(s.fs, name, []byte(skipHash), 0o644))
@@ -245,7 +248,7 @@ func (s *Store) EnsureCacheDir(path string) string {
 	name := cacheDirName(path)
 	dir := filepath.Join(UserRoot, name)
 	if info, err := vfsx.TryLstat(s.fs, dir); os.IsNotExist(err) {
-		c.Check(s.fs.MkdirAll(dir, 0o755))
+		s.MakeBuildSubdir(dir)
 	} else {
 		c.Checkf(err, "Lstat '%s'", dir)
 		c.Require(info.IsDir(), "Cache dir '%s' of '%s' exists but is not a directory", dir, path)
@@ -276,6 +279,7 @@ func (s *Store) linkTo(root, name, hash string) {
 
 // Resolved to an absolute OS target so Windows makes a directory symlink.
 func (s *Store) symlinkAt(targetPath, linkPath string) {
+	s.MakeBuildSubdir(filepath.Dir(linkPath)) // NOT left to osSymlink's parent MkdirAll: that skips the root tag
 	vfsx.XSymlink(s.fs, targetPath, s.fs, linkPath)
 }
 
@@ -348,7 +352,7 @@ func (s *Store) SrcPrepEmpty(srcDir string) string {
 	hash := Hashing.EmptyDirHash
 	// An empty tree has no content to stage, so create the final dir directly: MkdirAll is idempotent
 	// and needs no tmp-stage + rename, which only exists to hide partial content.
-	c.Check(s.fs.MkdirAll(filepath.Join(InRoot, hash), 0o755))
+	s.MakeBuildSubdir(filepath.Join(InRoot, hash))
 	slog.Info("SrcPrepEmpty prepared", "dir", srcDir, "hash", hash)
 	s.LinkPath(InRoot, srcDir, hash)
 	return hash
@@ -510,7 +514,7 @@ func (s *Store) publishDir(root, hash, dir string) {
 		c.Check(s.fs.RemoveAll(dir))
 		return
 	}
-	c.Check(s.fs.MkdirAll(root, 0o755))
+	s.MakeBuildSubdir(root)
 	if err := s.fs.Rename(dir, targetPath); err != nil {
 		slog.Error("Store: publish failed", "path", targetPath, "err", err)
 		// Lost a publish race for the same content — fine, it's there now.
@@ -524,7 +528,7 @@ func (s *Store) copyTree(srcFs vfs.Fs, srcPath string, dstPath string, pruneNest
 ) {
 	slog.Debug("copyTree", "src", srcPath, "dst", dstPath)
 
-	c.Check(s.fs.MkdirAll(dstPath, 0o755))
+	s.MakeBuildSubdir(dstPath)
 	skipFilter := filteredSkip(srcPath, pruneNested, filter, allowLinks)
 	c.Require(isDirEmpty(s.fs, dstPath), "Store: destination %s is not empty", dstPath)
 	s.copyDir(srcFs, srcPath, dstPath, skipFilter)
@@ -543,7 +547,7 @@ func (s *Store) copyDir(srcFs vfs.Fs, srcDir, dstDir string, skipFilter func(vfs
 				continue // prune nested build unit / filtered-out subtree
 			}
 			if skipFilter == nil {
-				c.Check(s.fs.MkdirAll(dst, 0o755)) // verbatim: keep empty dirs
+				s.MakeBuildSubdir(dst) // verbatim: keep empty dirs
 			}
 			s.copyDir(srcFs, src, dst, skipFilter)
 			continue
@@ -557,7 +561,7 @@ func (s *Store) copyDir(srcFs vfs.Fs, srcDir, dstDir string, skipFilter func(vfs
 				continue
 			}
 			if !createdDirs.Contains(dstDir) {
-				c.Check(s.fs.MkdirAll(dstDir, 0o755)) // on-demand
+				s.MakeBuildSubdir(dstDir) // on-demand
 				createdDirs.Add(dstDir)
 			}
 		}
@@ -611,6 +615,6 @@ func (s *Store) copyFileWritable(srcFs vfs.Fs, srcPath, dstPath string) {
 }
 
 func (s *Store) CopyFileIn(srcFs vfs.Fs, srcPath, dstPath string) {
-	c.Check(s.fs.MkdirAll(filepath.Dir(dstPath), 0o755))
+	s.MakeBuildSubdir(filepath.Dir(dstPath))
 	s.copyFileWritable(srcFs, srcPath, dstPath)
 }

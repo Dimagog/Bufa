@@ -8,7 +8,6 @@ import (
 	"net/rpc"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
 	c "github.com/dimagog/bufa/internal/contract"
@@ -29,12 +28,16 @@ func PollUntil(timeout time.Duration, cond func() bool) bool {
 	return false
 }
 
-func Connect(sockPath string, daemonArgs ...string) (net.Conn, bool) {
+// beforeSpawn runs only when no daemon answers: the socket's dir must exist by the time Serve binds.
+func Connect(sockPath string, beforeSpawn func(), daemonArgs ...string) (net.Conn, bool) {
 	if conn, err := net.Dial("unix", sockPath); err == nil {
 		slog.Info("Connected to daemon", "sockPath", sockPath)
 		return conn, true
 	}
 
+	if beforeSpawn != nil {
+		beforeSpawn()
+	}
 	exe := c.Check2(os.Executable())
 	spawnArgs := append([]string{"--daemon", sockPath}, daemonArgs...)
 	cmd := exec.Command(exe, spawnArgs...)
@@ -60,10 +63,9 @@ func Connect(sockPath string, daemonArgs ...string) (net.Conn, bool) {
 	return nil, false
 }
 
-// Serve creates the socket's parent dir first — a missing dir would otherwise make the Listen
-// failure look like a stale socket.
+// Serve never creates the socket's dir: the spawner does (Connect's beforeSpawn), so a missing dir
+// fails loudly instead of quietly minting an untagged one.
 func Serve(sockPath string, idleTimeout time.Duration, register func(srv *rpc.Server, stop func())) {
-	c.Check(os.MkdirAll(filepath.Dir(sockPath), 0o755))
 	l, err := net.Listen("unix", sockPath)
 	if err != nil {
 		slog.Warn("Socket path exists; probing for live daemon", "sockPath", sockPath)

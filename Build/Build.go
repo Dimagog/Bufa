@@ -291,7 +291,7 @@ func (b *Builder) realBuild(
 func (b *Builder) runBuildScript(srcDir, bldDir string, cfg BuildConfig.BufaConfig, shell string, bldDeps []string) {
 	// Fresh tmp/: a failed build's leftovers must not reach this script through TEMP.
 	c.Check(b.BldFS.RemoveAll(Store.TmpRoot))
-	c.Check(b.BldFS.MkdirAll(Store.TmpRoot, 0o755))
+	b.store.MakeBuildSubdir(Store.TmpRoot)
 
 	osBldDir := filepath.Join(b.BldRoot, bldDir)
 	osTmpDir := filepath.Join(b.BldRoot, Store.TmpRoot)

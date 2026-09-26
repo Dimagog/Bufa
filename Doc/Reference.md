@@ -153,7 +153,7 @@ rebuild you. Nothing is transitive. In dirty mode the deps build dirty, in place
 
 #### `[[deps.ext]]`
 
-A list of pinned downloads, fetched by Bufa, verified once, and kept in the global per-user artifact cache. The
+A list of pinned downloads, fetched by Bufa, verified once, and kept in the Global (per-user) Artifact Cache. The
 network is never on the rebuild path, and since the pinned hash makes the fetch deterministic, a dir using them stays
 hermetic: no `unsafe = true` needed.
 
@@ -200,6 +200,10 @@ project.
 
 `bufa nuke --global-only` (or `--global`) deletes the whole cache; the next build re-downloads and re-verifies every
 artifact.
+
+The Global Artifact Cache and every `<project>.BUFA` build dir hold a `CACHEDIR.TAG` file (the [Cache Directory Tagging
+Specification](https://bford.info/cachedir/)), so backup tools that honor it skip them: restic, borg, and GNU tar with
+`--exclude-caches`, kopia by default.
 
 #### `deps.export`
 

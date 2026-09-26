@@ -111,12 +111,13 @@ func TestEnsure_FetchVerifyThenHit(t *testing.T) {
 		t.Errorf("cache hit must print nothing, got %q", out2.String())
 	}
 	entries := c.Check2(os.ReadDir(ac.Dir()))
-	if len(entries) != 2 || entries[0].Name() != pin || entries[1].Name() != urlLinkName(srv.URL+"/art.bin") {
+	if len(entries) != 3 || entries[0].Name() != Store.CacheDirTagName || entries[1].Name() != pin ||
+		entries[2].Name() != urlLinkName(srv.URL+"/art.bin") {
 		names := make([]string, len(entries))
 		for i, e := range entries {
 			names[i] = e.Name()
 		}
-		t.Errorf("cache root = %v, want exactly the entry and its url link (no staging leftovers)", names)
+		t.Errorf("cache root = %v, want exactly the tag, the entry and its url link (no staging leftovers)", names)
 	}
 }
 

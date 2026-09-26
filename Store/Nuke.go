@@ -15,8 +15,9 @@ import (
 var layoutRoots = Util.Set[string]{InRoot: {}, OutRoot: {}, BldSandboxRoot: {}, DirtyRoot: {}, TmpRoot: {}, UserRoot: {}}
 
 // The build root's ownership rule, shared by Nuke's refusal and Check's top-level pass: the layout
-// roots as directories plus allowedFiles as non-directories.
+// roots as directories plus the cache dir tag and allowedFiles as non-directories.
 func ownedTopLevel(allowedFiles []string) func(e fs.FileInfo) bool {
+	allowedFiles = append(allowedFiles, CacheDirTagName)
 	return func(e fs.FileInfo) bool {
 		name := e.Name()
 		if e.IsDir() {
