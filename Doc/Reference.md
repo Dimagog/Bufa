@@ -45,6 +45,7 @@ All keys, with their defaults:
 | `shell`              | shell running `cmd`      | string              | `""` (inherit) | replace       |
 | `unsafe`             | non-hermetic build       | bool                | `false`        | replace       |
 | `largeOutput`        | consumers link, not copy | bool                | `false`        | replace       |
+| `task`               | run every time, no output| bool                | `false`        | replace       |
 | `deps.src`           | source deps              | list of paths       | `[]`           | append        |
 | `deps.bld`           | built deps               | list of paths       | `[]`           | append        |
 | `[[deps.ext]]`       | pinned downloads         | list of tables      | `[]`           | append        |
@@ -131,6 +132,39 @@ and dirty builds are unaffected. No cache-key effect on consumers.
 
 Such corruptions could be detected with `bufa check` after the fact.\
 And `bufa check --fix` removes it from the store, so the next build republishes a clean copy.
+
+### `task`
+
+`task = true` makes the dir a **task**: its script runs on **every** invocation and it publishes nothing. A deploy
+step is the typical one — a side effect, for which "same inputs, serve the cached output" is the wrong model:
+
+```toml
+# deploy.BUFA
+task = true
+deps.bld = ["/"]
+
+cmd = '$BUFA_COPY_OR_MOVE ../bufa ~/bin'
+```
+
+`bufa deploy` builds `/` (cached as usual), stages `deploy` exactly as a build would — deps, own source, the
+[hermetic environment](#set-for-build-scripts), cwd, shell — and runs its script. Then, instead of publishing and
+printing a `Build result:` line, it prints `Task succeeded`; a failing script fails the run exactly as a build's would.
+A task is never a cache hit in either build mode and under any flag: `--force` is a no-op on it,
+`--force-all` still forces its deps; a dirty task records no skip hash. `--shell`/`--post-shell` open its shell as
+for any dir, printing no result line. A task's own `deps.bld = ["/"]` is what guarantees a fresh dependency output
+on every run.
+
+The following are all config errors:
+
+* A task must have a script: `task = true` with `cmd = false` makes no sense.
+* A task publishes nothing, so `largeOutput`, `deps.export` (or an `[[deps.ext]]` `export = true`), and
+  `[filters].bld` are not allowed.
+* A task cannot be anyone's `deps.bld` dependency or shell provider — it has no output to depend on. It may be a
+  `deps.src` dependency (its source tree only), and may itself list `deps.bld` and `deps.src`.
+
+A raw-script `BUFA` is never a task. Like every other scalar, `task`
+[replaces per platform](#platform-sections-windows--unix--linux--macos): `[windows] task = false` turns a root task
+off on Windows.
 
 ### `[deps]`
 
@@ -342,8 +376,9 @@ Windows folds `[windows]`; Linux folds `[unix]` then `[linux]`; macOS folds `[un
 folds `[unix]` alone. All four are top-level tables (`[macos]`, not `[unix.macos]`). Each fold applies the same
 rules, so a `[linux]` setting beats the `[unix]` one exactly as `[unix]` beats the root:
 
-* **Scalars** (`cmd`, `shell`, `unsafe`, `largeOutput`, `deps.cacheDir`) replace the value so far when **present** in
-  the section, whatever their value: an explicit `[windows] unsafe = false` beats a root `unsafe = true`.
+* **Scalars** (`cmd`, `shell`, `unsafe`, `largeOutput`, `task`, `deps.cacheDir`) replace the value so far when
+  **present** in the section, whatever their value: an explicit `[windows] unsafe = false` beats a root
+  `unsafe = true`.
 * **Lists** (`deps.src`, `deps.bld`, `deps.export`, `[[deps.ext]]`, `filters.*`) are appended: root's, then
   `[unix]`'s, then the leaf's.
 * **`[env]`** merges per exact key, the later section's value winning in the earlier key's position.

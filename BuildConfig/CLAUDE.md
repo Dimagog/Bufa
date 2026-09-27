@@ -14,9 +14,16 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   config-read time (dirty builds materialize them; a non-directory panics at read in both modes), so Build's
   `requireVirtualDirAbsent`
   can enforce the clean-mode must-not-exist contract even on a daemon hit.
-- **`BaseConfig{Unsafe, LargeOutput, Shell, Cmd, Env, Deps, Filters}`** — every user-settable setting; it is both the
-  root-table shape and, verbatim, the shape of every platform section.
+- **`BaseConfig{Unsafe, LargeOutput, Task, Shell, Cmd, Env, Deps, Filters}`** — every user-settable setting; it is
+  both the root-table shape and, verbatim, the shape of every platform section.
   - `Unsafe bool` — Build runs the script with the inherited PATH and salts the key with a TTL bucket.
+  - `Task bool` (`task`, `Doc/Specs/ScriptArgs.md`, the `task = true` half only) — the dir is a **task**: its script
+    runs on every invocation and it publishes nothing (Build owns the flow — `Build/CLAUDE.md`, **Tasks**). A plain
+    bool: `true`/`false`/absent, any other type fails at decode. Folds by **presence** like `unsafe`, so a section's
+    `task = false` switches a root task off. `checkTask()` runs in `afterDecode` **after** the platform fold (it needs
+    the folded view) and hard-fails a task with `cmd = false` (a task without a script does nothing) or with any
+    publish-side key — `largeOutput`, `deps.export`, an `[[deps.ext]]` `export = true`, `[filters].bld` — as wrong
+    as an unknown key. A raw-script config is never a task (the fallback bypasses `finalizeDecode`).
   - `LargeOutput bool` (`largeOutput`) — provider-declared: consumers stage this dir's output as a `deps.bld` dep by
     **link** (`Store.RestoreLink`) instead of copy; clean mode only, no cache-key term, consumers treat the tree
     read-only (`Doc/Specs/LinkStaging.md`).
@@ -77,8 +84,9 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   shape — and **zeroes all four sections** afterwards, so cached configs carry effective values only and nothing
   outside this package reads a section. The `sections` parameter exists so tests fold the `unix → linux` chain on
   any host; production passes `PlatformSections`. Merge rules, identical at every level:
-  scalars (`unsafe`, `largeOutput`, `cmd`, `shell`, `deps.cacheDir`) override when **present** (via `defined`, not
-  truthiness — an explicit `unsafe = false` beats a root `true`); `deps.src/bld/ext` + `filters.*` **concat**
+  scalars (`unsafe`, `largeOutput`, `task`, `cmd`, `shell`, `deps.cacheDir`) override when **present** (via
+  `defined`, not truthiness — an explicit `unsafe = false` beats a root `true`); `deps.src/bld/ext` + `filters.*`
+  **concat**
   root-first (appended filter rules win under last-match; ext keeps the additive `[[windows.deps.ext]]` precedent);
   `[env]` merges per **exact** key via `EnvTable.override` (a case-fold-only collision keeps both keys and fails
   `CheckEnvVarNames`). With an empty root `filters.src`, platform rules become the user tier's head, so a platform
@@ -162,7 +170,10 @@ Each binds this package to another; changing either side breaks the other with n
   hook guarantees; a table reaching Build any other way exports name-sorted with no error. Build applies a
   `ShellDef` without re-checking it — `Ext` glued onto `BUFA`, `Run` trusted to carry `${script}`, nil
   `Shell`/`PostShell` as "mode absent" — so `DecodeShellDef`'s `Validate` and the nil-vs-`[]` distinction are what
-  stand between a malformed `BUFA.shell` and a silently script-less shell invocation.
+  stand between a malformed `BUFA.shell` and a silently script-less shell invocation. Build's task path never
+  re-checks a task's shape: it runs the script unconditionally (no `IsScriptOptional` branch can be taken) and skips
+  publish without consulting `Filters.Bld`/`Deps.Export`, on the strength of `checkTask` having rejected a
+  `cmd = false` or publish-side-keyed task at decode; a task admitted past it would silently drop those settings.
 - [Store](../Store/CLAUDE.md) — `Store.ShellDefFileName` (`BUFA.shell`) lies **outside** `IsReservedName`'s
   namespace on purpose: a provider's definition must stage as its own source and publish beside its binary.
   Reserving it would make `srcFiltersOverride` or `cleanLocalName` drop it and every provider publish without its

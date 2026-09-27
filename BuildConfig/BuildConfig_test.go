@@ -205,6 +205,68 @@ func TestCmdDisabled(t *testing.T) {
 	}
 }
 
+func TestTask_Decode(t *testing.T) {
+	if cfg := decode(t, "task = true\ncmd = 'x'\n"); !cfg.Task {
+		t.Error("task = true must decode as a task")
+	}
+	if cfg := decode(t, "task = false\ncmd = 'x'\n"); cfg.Task {
+		t.Error("task = false must not be a task")
+	}
+	if cfg := decode(t, "cmd = 'x'\n"); cfg.Task {
+		t.Error("absent task must not be a task")
+	}
+	var cfg BufaConfig
+	if err := c.Rescue(func() { DecodeConfigOrScript([]byte("task = ['out']\ncmd = 'x'\n"), "BUFA", &cfg) }); err == nil {
+		t.Error("a non-bool task must fail to decode")
+	}
+}
+
+func TestTask_PlatformFoldReplacesWholeValue(t *testing.T) {
+	cases := []struct {
+		name, doc string
+		task      bool
+	}{
+		{name: "explicit false beats root true", doc: "task = true\ncmd = 'x'\n" + bothSections(platTable("", "task = false\n")), task: false},
+		{name: "explicit true beats root false", doc: "cmd = 'x'\n" + bothSections(platTable("", "task = true\n")), task: true},
+		{name: "absent key keeps root", doc: "task = true\ncmd = 'x'\n" + bothSections(platTable("", "cmd = 'y'\n")), task: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if cfg := decode(t, tc.doc); cfg.Task != tc.task {
+				t.Errorf("Task = %v, want %v", cfg.Task, tc.task)
+			}
+		})
+	}
+}
+
+// Validated after the fold: a platform section can make or unmake the offending combination.
+func TestTask_RejectsScriptlessAndPublishSideKeys(t *testing.T) {
+	ext := "[[deps.ext]]\nurl = 'http://x.invalid/a.jar'\nhash = 'Faa'\n"
+	for _, tc := range []struct{ name, doc, want string }{
+		{name: "cmd = false", doc: "task = true\ncmd = false\n", want: "cmd = false does nothing"},
+		{name: "largeOutput", doc: "task = true\ncmd = 'x'\nlargeOutput = true\n", want: "largeOutput"},
+		{name: "deps.export", doc: "task = true\ncmd = 'x'\n[deps]\nexport = ['a']\n", want: "deps.export"},
+		{name: "ext export", doc: "task = true\ncmd = 'x'\n" + ext + "export = true\n", want: "[[deps.ext]] export = true"},
+		{name: "filters.bld", doc: "task = true\ncmd = 'x'\n[filters]\nbld = ['+*.jar']\n", want: "[filters].bld"},
+		{name: "platform makes it a task", doc: "cmd = 'x'\nlargeOutput = true\n" + bothSections(platTable("", "task = true\n")), want: "largeOutput"},
+		{name: "platform makes it scriptless", doc: "task = true\ncmd = 'x'\n" + bothSections(platTable("", "cmd = false\n")), want: "cmd = false does nothing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var cfg BufaConfig
+			err := c.Rescue(func() { DecodeConfigOrScript([]byte(tc.doc), "BUFA", &cfg) })
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("want error containing %q, got %v", tc.want, err)
+			}
+		})
+	}
+	// The platform fold switching the task off makes the same keys legal again.
+	if cfg := decode(t, "task = true\ncmd = 'x'\nlargeOutput = true\n"+bothSections(platTable("", "task = false\n"))); cfg.Task || !cfg.LargeOutput {
+		t.Errorf("task = false in a section must unmake the task: %+v", cfg.BaseConfig)
+	}
+	// Non-publish keys stay legal.
+	decode(t, "task = true\ncmd = 'x'\nunsafe = true\ndeps.cacheDir = true\n[deps]\nbld = ['/a']\nsrc = ['/b']\n"+ext+"[filters]\nsrc = ['-*.md']\ndirty = ['-out/']\n")
+}
+
 func TestApplyPlatformSettings_EnvMergePlatformWins(t *testing.T) {
 	cfg := decode(t, "[env]\nA = '1'\nB = '2'\n"+
 		bothSections(platTable(".env", "B = '9'\nC = '3'\n")))

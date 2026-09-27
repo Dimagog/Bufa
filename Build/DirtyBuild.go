@@ -94,7 +94,7 @@ func (b *DirtyBuilder) build(srcDir string) string {
 	buildConfig := b.getBuildConfig(srcDir)
 	shell := b.shellFor(srcDir, buildConfig)
 
-	bldDeps := effectiveBldDeps(srcDir, buildConfig, shell)
+	bldDeps := b.effectiveBldDeps(srcDir, buildConfig, shell)
 	_, bldDepsHash := depsHashes(srcDir, "bld.dep", bldDeps, b.Build)
 	_, srcDepsHash := depsHashes(srcDir, "src.dep", buildConfig.Deps.Src, b.getDirtyHash)
 
@@ -126,8 +126,8 @@ func (b *DirtyBuilder) build(srcDir string) string {
 		return b.checkSkipHash(dir, b.Daemon.GetDirtySkipHash(dir), skipHashFn)
 	}
 
-	if b.ForceRebuildFor(srcDir) {
-		slog.Info("Forced dirty rebuild — bypassing skip hashes", "dir", srcDir)
+	if b.mustRebuild(srcDir, buildConfig) {
+		slog.Info("Bypassing skip hashes", "dir", srcDir, "task", buildConfig.Task)
 		storeCheckSkipHash = alwaysMiss
 		daemonCheckSkipHash = alwaysMiss
 	}
@@ -177,7 +177,7 @@ func (b *DirtyBuilder) realDirtyBuild(
 		c.Check(b.SrcFS.MkdirAll(srcDir, 0o755))
 	}
 
-	if b.placeExtDeps(srcDir, buildConfig) && !b.ForceRebuildFor(srcDir) {
+	if b.placeExtDeps(srcDir, buildConfig) && !b.mustRebuild(srcDir, buildConfig) {
 		// Heal-skip: placement is bufa's own bookkeeping, not user change — a matching tree must NOT re-run.
 		if stored := b.store.GetDirtySkipHash(srcDir); stored != "" {
 			fresh := b.computeDirtyHash(srcDir)
@@ -193,8 +193,8 @@ func (b *DirtyBuilder) realDirtyBuild(
 		b.runDirtyBuildScript(srcDir, buildConfig, shell, bldDeps)
 	}
 
-	if b.ShellSessionFor(srcDir) {
-		slog.Info("Shell session over — nothing to record", "dir", srcDir)
+	if b.ShellSessionFor(srcDir) || buildConfig.Task {
+		slog.Info("Nothing to record", "dir", srcDir, "task", buildConfig.Task)
 		return ""
 	}
 

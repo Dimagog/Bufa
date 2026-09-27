@@ -171,6 +171,24 @@ func (b *BuilderBase) setCacheDirEnv(env *Env, srcDir string, cfg BuildConfig.Bu
 	}
 }
 
+func (b *BuilderBase) effectiveBldDeps(srcDir string, cfg BuildConfig.BufaConfig, shell string) []string {
+	deps := cfg.Deps.Bld
+	if _, preset := decodeShellPreset(shell); shell != "" && !preset {
+		c.Require(!slices.Contains(cfg.Deps.Bld, shell),
+			"'%s' lists its shell provider '%s' in deps.bld; bufa adds that dependency itself", srcDir, shell)
+		slog.Info("Adding shell provider dependency", "dir", srcDir, "provider", shell)
+		deps = slices.Concat(cfg.Deps.Bld, []string{shell})
+	}
+	for _, dep := range deps {
+		c.Require(!b.getBuildConfig(dep).Task, "'%s' is a task and cannot be a build dependency of '%s'", dep, srcDir)
+	}
+	return deps
+}
+
+func (b *BuilderBase) mustRebuild(srcDir string, cfg BuildConfig.BufaConfig) bool {
+	return cfg.Task || b.ForceRebuildFor(srcDir)
+}
+
 func depsHashes(srcDir, kind string, deps []string, getHash func(string) string) ([]Hashing.NamedEntry, string) {
 	hashes := make([]Hashing.NamedEntry, 0, len(deps))
 	for _, dep := range deps {

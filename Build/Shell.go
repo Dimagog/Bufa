@@ -113,19 +113,6 @@ func requireShellProviderDir(dir string) string {
 	return dir
 }
 
-func effectiveBldDeps(srcDir string, cfg BuildConfig.BufaConfig, shell string) []string {
-	if shell == "" {
-		return cfg.Deps.Bld
-	}
-	if _, preset := decodeShellPreset(shell); preset {
-		return cfg.Deps.Bld
-	}
-	c.Require(!slices.Contains(cfg.Deps.Bld, shell),
-		"'%s' lists its shell provider '%s' in deps.bld; bufa adds that dependency itself", srcDir, shell)
-	slog.Info("Adding shell provider dependency", "dir", srcDir, "provider", shell)
-	return slices.Concat(cfg.Deps.Bld, []string{shell})
-}
-
 func loadShellDef(shell string, fs vfs.Fs, fsRoot string) BuildConfig.ShellDef {
 	if presetName, isPreset := decodeShellPreset(shell); isPreset {
 		preset, ok := shellPresets()[presetName]

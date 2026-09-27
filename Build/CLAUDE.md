@@ -220,6 +220,29 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   are **materialized for real** (`SrcFS.MkdirAll`, never wiped); the config still records `VirtualDirMaterialized`,
   so the daemon prime makes the next clean build reject with "perhaps dirty-build output needs cleaning". No
   roundtrip caching, no early cutoff.
+- **Tasks** (`task = true`, `Doc/Specs/ScriptArgs.md` — its `task = true` half only; arguments are not implemented):
+  a dir whose script runs on **every** invocation and which publishes nothing — a deploy step, where "same inputs ⇒
+  serve the cached output" is the wrong model. Runs exactly as a build of the same dir up to and including the
+  script (deps build and cache normally — a task's own `deps.bld = ["/"]` guarantees a fresh dep output per run —
+  own source staged, `deps.cacheDir`, `unsafe`, env, cwd, interpreter and provider resolution unchanged), minus
+  everything after it. Both modes gate their cache bypass on the one predicate `mustRebuild` = `cfg.Task ||
+  ForceRebuildFor`, so a task is forced exactly as `--force` forces (`-f` is a no-op on a task, `-F` still forces its
+  deps). **Clean**: the two result getters are `alwaysMiss`, and `realBuild` returns `""` after the script instead
+  of publishing — no `MoveStore`, no `B`/`∕` link, no daemon record — removing the sandbox on success as a build
+  does; failure keeps `bld/` + `tmp/`. **Dirty**: both skip-hash getters `alwaysMiss` and the heal-skip bypassed;
+  `realDirtyBuild` returns `""` — no `setDirtyHash`, no skip hash. In both modes the `""` return
+  is what `Wrap_Def`'s zero-as-miss turns into "setters never fire". `localBuildCache` still caches the `""`
+  (`WrapInt` caches unconditionally), so a duplicate target in one invocation runs once. **This package prints no
+  result line**: a task reports through its `""` return exactly as a build reports through its hash, and cmd/bufa
+  turns a `""` under `ModeBuild` into `Task succeeded` (a session's `""` prints nothing); a failure is
+  reported by the frame footer and the propagated error alone, as for a build. **Graph rule**: a task in any
+  dir's `deps.bld`, or resolved as its shell provider (the implied dep rides the same list), is the hard error
+  `'<dep>' is a task and cannot be a build dependency of '<dir>'` — raised by `effectiveBldDeps` over the final
+  list, reading each dep's (cached) config **before any dep builds**; the same read each dep's `build()` does
+  next, so nothing new is fetched. A task may be a `deps.src`. No new cache-key term, no store shape change;
+  `Task` rides the cached config like every other field.
+  The shape checks (a task has a script; no `largeOutput`/`deps.export`/ext `export`/`[filters].bld`) are
+  BuildConfig's `checkTask` at decode — this package trusts them (**Cross-package contracts**).
 - **Shells** (`Shell.go`, `Doc/Specs/ConfigurableShells.md`): the interpreter is a `BuildConfig.ShellDef` from one of
   two sources — the embedded **presets** `cmd` (`cleanComSpec() /D /C|/K`, `/D` skips AutoRun; prompt
   `PROMPT`=`$P$G`; verbs `move`/`copy`; in the map on Windows **only**) and `bash` (bare `bash` on bufa's PATH;
@@ -232,7 +255,8 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   resolving to **itself** is "depends on itself via shell" — **except** an alias shadowing a preset name
   (`[shells] bash = "/build/bash"`), whose self-reference resolves to the preset so the provider can build;
   indirect cycles reach `circDepsCheck`. **The dep is implied**: `effectiveBldDeps` = `cfg.Deps.Bld` + the provider dir
-  (`slices.Concat`, never `append` onto the cached slice); listing it explicitly is an error. From there it is an
+  (`slices.Concat`, never `append` onto the cached slice); listing it explicitly is an error, as is any task in the
+  final list (**Tasks**). From there it is an
   ordinary bld dep: built first, staged, pruned when nested, **keyed** through `depsHashes`'s manifest (name = path,
   hash = output incl. the `BUFA.shell` bytes). **No new `combined` term**: a dir's `shell` is BUFA bytes; the
   marker's default joins `root.config`; a catalogue edit is already in the dep manifest. **Loading** (cold path
@@ -326,6 +350,9 @@ Each binds this package to another; changing either side breaks the other with n
   gateways' `afterDecode` hook restores it; a table built any other way exports name-sorted, silently. `ShellDef` is
   applied **unchecked** (`Ext` glued onto `BUFA`, `Run` trusted to carry `${script}`, nil `Shell`/`PostShell` read
   as "mode absent") on the strength of `DecodeShellDef`'s `Validate` and the decoder keeping nil distinct from `[]`.
+  The task path runs the script unconditionally and returns before publish without consulting `Filters.Bld` or
+  `Deps.Export`, trusting `checkTask` to have rejected a `cmd = false` or publish-side-keyed task at decode; a task
+  admitted past it silently drops those settings (and a scriptless one trips `runScriptStep`'s assert).
 - [FilterFiles](../FilterFiles/CLAUDE.md) — `srcFiltersOverride`'s unanchored `-*.BUFA` depends on
   `normalizePattern`'s implicit `**/` prefix and on `*` matching an **empty** run; `bldFilterForOrNil` returns nil
   rather than `Compile(nil)` because a zero-rule filter excludes everything.
@@ -339,7 +366,10 @@ Each binds this package to another; changing either side breaks the other with n
   daemon sock beside the six layout roots; the script lives in `tmp/`, so Build writing any file to the build root's
   **top level** makes a post-failure `nuke` refuse and `check` report it. `runInteractiveShell` reads stdin from
   `rc.In`, which only cmd/bufa's `buildMain` assigns — a nil `In` is a legal EOF stdin, so a path that forgets it
-  gets a shell that opens and exits at once, with no error.
+  gets a shell that opens and exits at once, with no error. `Build` returns `""` for exactly two reasons — a shell
+  session or a `task = true` dir — and `buildMain` tells them apart by its own `BuildMode` alone, printing
+  `Task succeeded` for a `""` under `ModeBuild`; a third `""` reason here, or a task that returned a hash,
+  silently mislabels the result line.
 - [DaemonClient](../DaemonClient/CLAUDE.md) — the build root has two creators, both tagging it: `Connect`'s spawn
   hook (daemon mode) and `Store.MakeBuildSubdir` (daemon-less). Neither checks the tag afterwards, so a
   `BldFS.MkdirAll`/`WriteFile` under the root that bypasses `MakeBuildSubdir` mints an untagged root in daemon-less

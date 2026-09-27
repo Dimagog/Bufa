@@ -26,6 +26,7 @@ type BaseConfig struct {
 	Filters     Filters          `toml:"filters"`
 	LargeOutput bool             `toml:"largeOutput"`
 	Shell       string           `toml:"shell"`
+	Task        bool             `toml:"task"`
 	Unsafe      bool             `toml:"unsafe"`
 }
 
@@ -286,6 +287,9 @@ func (cfg *BaseConfig) applySection(section *BaseConfig, definedKeys tomlKeysSet
 	if definedKeys.containsTomlKey(platSecName, "shell") {
 		cfg.Shell = section.Shell
 	}
+	if definedKeys.containsTomlKey(platSecName, "task") {
+		cfg.Task = section.Task
+	}
 	if definedKeys.containsTomlKey(platSecName, "deps", "cacheDir") {
 		cfg.Deps.CacheDir = section.Deps.CacheDir
 	}
@@ -301,6 +305,17 @@ func (cfg *BaseConfig) applySection(section *BaseConfig, definedKeys tomlKeysSet
 
 func (cfg *BufaConfig) IsScriptOptional() bool {
 	return cfg.Cmd.Disabled
+}
+
+func (cfg *BufaConfig) checkTask() {
+	if cfg.Task {
+		c.Require(!cfg.Cmd.Disabled, "a task must have a script: task = true with cmd = false does nothing")
+		c.Require(!cfg.LargeOutput, "a task publishes nothing: task = true with largeOutput is an error")
+		c.Require(len(cfg.Deps.Export) == 0, "a task publishes nothing: task = true with deps.export is an error")
+		c.Require(!slices.ContainsFunc(cfg.Deps.Ext, func(dep ExtDep) bool { return dep.Export }),
+			"a task publishes nothing: task = true with a [[deps.ext]] export = true is an error")
+		c.Require(len(cfg.Filters.Bld) == 0, "a task publishes nothing: task = true with [filters].bld is an error")
+	}
 }
 
 // The BUFA.shell schema, shared by the embedded presets and a provider dir's published definition.
@@ -377,6 +392,7 @@ func (cfg *RootConfig) afterDecode(keys []toml.Key) {
 func (cfg *BufaConfig) afterDecode(keys []toml.Key) {
 	cfg.Env.orderByDocument(keys, "env")
 	cfg.applyPlatformSettings(keys, PlatformSections)
+	cfg.checkTask()
 }
 
 func DecodeConfigOrScript(data []byte, path string, cfg *BufaConfig) {

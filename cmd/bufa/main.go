@@ -434,7 +434,7 @@ func buildMain(out io.Writer, in io.Reader, dirs []string, f buildFlags, dirty b
 		b = Build.NewBuilder(rc)
 	}
 	for _, srcDir := range srcDirs {
-		// Empty only after a shell session: it builds nothing, so there is no result to report.
+		// Empty after a shell session (nothing to report) or a task (nothing published to point at).
 		if buildHash := b.Build(srcDir); buildHash != "" {
 			var result string
 			if dirty {
@@ -443,6 +443,8 @@ func buildMain(out io.Writer, in io.Reader, dirs []string, f buildFlags, dirty b
 				result = rc.BuildResultDir(buildHash)
 			}
 			fmt.Fprintln(out, "Build result:", result)
+		} else if rc.BuildMode == Runtime.ModeBuild {
+			fmt.Fprintln(out, "Task succeeded")
 		}
 	}
 }

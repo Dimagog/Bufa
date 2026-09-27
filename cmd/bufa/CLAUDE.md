@@ -13,7 +13,10 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../../CLAUDE.md).
   absolute `<dir>` is never auto-detected — on unix `/x` is both root-relative and absolute — so a volume-carrying
   one hard-fails pointing at `--start-dir`. Runtime takes no dir at all. **Several targets** build **sequentially in
   command-line order on one builder**, so a dep shared by two targets builds once; each prints its own
-  `Build result:` line, the first failure stops the rest, a duplicate target is a local-cache hit. Flags go before
+  `Build result:` line (a `task = true` dir returns `""` and prints `Task succeeded` instead — the only `""`
+  under `ModeBuild`; a session's `""` prints nothing; a failure of either prints no result line, just the frame
+  footer and the `bufa ERROR:`), the first failure stops the rest, a duplicate target is a local-cache hit. Flags go
+  before
   or after the dir list; `bufa a -f b` is a parse error (kong fills a slice positional from consecutive tokens
   only). build is the **default command** (`default:"withargs"`); command names win over dir names **as the first
   token only** (`bufa a gc` builds `a` and `gc`; escape via `bufa ./gc`).
@@ -101,7 +104,9 @@ Each binds this package to another; changing either side breaks the other with n
   NS randomly alive or down-until-takeover.
 - [Build](../../Build/CLAUDE.md) — `nuke` and `check` allowlist only `DaemonClient.SockName` at the build root's top
   level because Build keeps its script inside `tmp/`; Build writing any top-level build-root file makes a
-  post-failure `nuke` refuse and `check` report it, with no test here catching it.
+  post-failure `nuke` refuse and `check` report it, with no test here catching it. `Build` returns `""` for exactly
+  two reasons — a shell session or a `task = true` dir — and `buildMain` tells them apart by `rc.BuildMode` alone
+  (`ModeBuild` ⇒ `Task succeeded`, else nothing); a third `""` reason in Build silently mislabels the line.
 - [Runtime](../../Runtime/CLAUDE.md) — `Runtime.Config` is copied **by value** into the builder, so `rc.TargetDirs`
   (in the srcRoot-relative key space `resolveVirtualDirAgainstOSPaths` produces), `rc.ShowOutput`, `rc.ForceRebuild`,
   `rc.BuildMode`, and `rc.In` must be assigned before `NewBuilder`/`NewDirtyBuilder`; moving any later silently

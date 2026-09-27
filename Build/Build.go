@@ -115,7 +115,7 @@ func (b *Builder) build(srcDir string) string {
 	buildConfig := b.getBuildConfig(srcDir)
 	shell := b.shellFor(srcDir, buildConfig)
 
-	bldDeps := effectiveBldDeps(srcDir, buildConfig, shell)
+	bldDeps := b.effectiveBldDeps(srcDir, buildConfig, shell)
 	bldDepsHashes, bldDepsHash := depsHashes(srcDir, "bld.dep", bldDeps, b.Build)
 	srcDepsHashes, srcDepsHash := depsHashes(srcDir, "src.dep", buildConfig.Deps.Src, b.getSrcHash)
 
@@ -151,8 +151,8 @@ func (b *Builder) build(srcDir string) string {
 		return buildHash
 	}
 
-	if b.ForceRebuildFor(srcDir) {
-		slog.Info("Forced rebuild — bypassing build caches", "dir", srcDir)
+	if b.mustRebuild(srcDir, buildConfig) {
+		slog.Info("Bypassing build caches", "dir", srcDir, "task", buildConfig.Task)
 		storeGetBuildHash = alwaysMiss
 		daemonGetBuildHash = alwaysMiss
 	}
@@ -273,15 +273,20 @@ func (b *Builder) realBuild(
 		return ""
 	}
 
-	extPrune, keepLinks := extDepPublishPlan(buildConfig, exportDeps)
-	buildHash := b.store.MoveStore(Store.OutRoot, bldDir, Store.PublishPlan{
-		Filter:     bldFilterForOrNil(buildConfig.Filters.Bld),
-		PruneDirs:  pruneDirs,
-		ExtPrune:   extPrune,
-		KeepLinks:  keepLinks,
-		AllowLinks: buildConfig.Unsafe,
-	})
-	slog.Info("Build hash:", "dir", srcDir, "hash", buildHash)
+	buildHash := ""
+	if buildConfig.Task {
+		slog.Info("Task done — nothing to publish", "dir", srcDir)
+	} else {
+		extPrune, keepLinks := extDepPublishPlan(buildConfig, exportDeps)
+		buildHash = b.store.MoveStore(Store.OutRoot, bldDir, Store.PublishPlan{
+			Filter:     bldFilterForOrNil(buildConfig.Filters.Bld),
+			PruneDirs:  pruneDirs,
+			ExtPrune:   extPrune,
+			KeepLinks:  keepLinks,
+			AllowLinks: buildConfig.Unsafe,
+		})
+		slog.Info("Build hash:", "dir", srcDir, "hash", buildHash)
+	}
 
 	// Success only — NOT deferred: a panic above must leave the sandbox intact
 	c.Check(b.BldFS.RemoveAll(Store.BldSandboxRoot))
