@@ -12,7 +12,7 @@ import (
 	c "github.com/dimagog/bufa/internal/contract"
 )
 
-var layoutRoots = Util.Set[string]{InRoot: {}, OutRoot: {}, BldSandboxRoot: {}, DirtyRoot: {}, TmpRoot: {}, UserRoot: {}}
+var layoutRoots = Util.NewSetOf(InRoot, OutRoot, BldSandboxRoot, DirtyRoot, TmpRoot, UserRoot)
 
 // The build root's ownership rule, shared by Nuke's refusal and Check's top-level pass: the layout
 // roots as directories plus the cache dir tag and allowedFiles as non-directories.

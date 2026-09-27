@@ -17,13 +17,20 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
 - **`BaseConfig{Unsafe, LargeOutput, Task, Shell, Cmd, Env, Deps, Filters}`** — every user-settable setting; it is
   both the root-table shape and, verbatim, the shape of every platform section.
   - `Unsafe bool` — Build runs the script with the inherited PATH and salts the key with a TTL bucket.
-  - `Task bool` (`task`, `Doc/Specs/ScriptArgs.md`, the `task = true` half only) — the dir is a **task**: its script
-    runs on every invocation and it publishes nothing (Build owns the flow — `Build/CLAUDE.md`, **Tasks**). A plain
-    bool: `true`/`false`/absent, any other type fails at decode. Folds by **presence** like `unsafe`, so a section's
-    `task = false` switches a root task off. `checkTask()` runs in `afterDecode` **after** the platform fold (it needs
-    the folded view) and hard-fails a task with `cmd = false` (a task without a script does nothing) or with any
-    publish-side key — `largeOutput`, `deps.export`, an `[[deps.ext]]` `export = true`, `[filters].bld` — as wrong
-    as an unknown key. A raw-script config is never a task (the fallback bypasses `finalizeDecode`).
+  - `Task Task` (`task`, `Doc/Specs/ScriptArgs.md`) — the dir is a **task**: its script runs on every invocation and
+    it publishes nothing (Build owns the flow — `Build/CLAUDE.md`, **Tasks**). A bool-or-list union
+    (`Task.UnmarshalTOML`): `true` ⇒ `Enabled`; a string list ⇒ `Enabled` + `Args`, the **caller's** env vars of
+    those names that Build lets through into an otherwise hermetic safe script (`[]` ≡ `true`); `false` ⇒ the zero
+    value; any other type or a non-string element fails at decode. Folds by **presence** like `unsafe`, the whole
+    value replaced (names never concatenate), so a section's `task = false` switches a root task off. `checkTask()`
+    runs in `afterDecode` **after** the platform fold (it needs the folded view) and hard-fails a task with
+    `cmd = false` (a task without a script does nothing) or with any publish-side key — `largeOutput`,
+    `deps.export`, an `[[deps.ext]]` `export = true`, `[filters].bld` — as wrong as an unknown key; then
+    `checkTaskArgs` applies the `[env]` name rules to `Args` (non-empty, unique case-folded, no `BUFA_` — one
+    `checkVarName` shared with `CheckEnvVarNames`) plus two of its own: no name Build's clean env sets after
+    inheritance (`bufaSetEnvVars`: `PATH`, `TEMP`, `TMP`, `PATHEXT`, `ComSpec`, `HOME`, `TMPDIR`, case-folded —
+    a let-through of those would be a lie) and no name also in the folded `[env]` table (set last, it would always
+    win). A raw-script config is never a task (the fallback bypasses `finalizeDecode`).
   - `LargeOutput bool` (`largeOutput`) — provider-declared: consumers stage this dir's output as a `deps.bld` dep by
     **link** (`Store.RestoreLink`) instead of copy; clean mode only, no cache-key term, consumers treat the tree
     read-only (`Doc/Specs/LinkStaging.md`).
@@ -174,6 +181,9 @@ Each binds this package to another; changing either side breaks the other with n
   re-checks a task's shape: it runs the script unconditionally (no `IsScriptOptional` branch can be taken) and skips
   publish without consulting `Filters.Bld`/`Deps.Export`, on the strength of `checkTask` having rejected a
   `cmd = false` or publish-side-keyed task at decode; a task admitted past it would silently drop those settings.
+  Build's `safeInheritedEnvFor` likewise lets `Task.Args` through **unchecked**: `bufaSetEnvVars` here must name
+  every var Build's clean env sets after inheritance (`cleanSystemPath` + `setPlatformEnv`) — a var added there
+  without a line here is a silent clobber of a let-through.
 - [Store](../Store/CLAUDE.md) — `Store.ShellDefFileName` (`BUFA.shell`) lies **outside** `IsReservedName`'s
   namespace on purpose: a provider's definition must stage as its own source and publish beside its binary.
   Reserving it would make `srcFiltersOverride` or `cleanLocalName` drop it and every provider publish without its

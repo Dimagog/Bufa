@@ -90,8 +90,10 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   traversing; failure keeps the sandbox.
   Script: `tmp/<script>`, gone with `tmp/` on success, kept on failure; `cmd.Dir` = unit dir; interpreter = the
   dir's shell definition (**Shells**). **Env**: inherited verbatim for `unsafe` (`newEnv(os.Environ())`); for safe
-  dirs `newFilteredEnv(…, safeInheritedEnv)` keeps only Windows `OS`/`SystemDrive`/`SystemRoot`/`windir`
-  (`Doc/Specs/WindowsMinEnvVars.html`'s must-keep list minus what bufa sets itself), Unix **nothing**. Then
+  dirs `newFilteredEnv(…, safeInheritedEnvFor(cfg.Task.Args))` keeps only Windows `OS`/`SystemDrive`/`SystemRoot`/
+  `windir` (`Doc/Specs/WindowsMinEnvVars.html`'s must-keep list minus what bufa sets itself), Unix **nothing** —
+  plus a task's declared argument names (**Tasks**), folded like every other name and cloned onto the allowlist
+  per call (a set absent from the caller's env is simply absent, never an error). Then
   `setBufaEnv` (one list shared with dirty): `BUFA_BUILD_ROOT`=`<bldRoot>/bld` + `BUFA_BUILD_DIR`=root-relative src
   dir (`%BUFA_BUILD_ROOT%\%BUFA_BUILD_DIR%` == cwd in both modes; relative so a script can bake it into a generated
   file and get byte-identical output on every machine), `BUFA_CACHE_ROOT`=`<bldRoot>/user` (pure path arithmetic),
@@ -111,7 +113,8 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   writer so os/exec serializes; an `*os.File` is handed to the child as the fd) with an unconditional pre-footer
   newline, or buffer and dump the identical frame on failure only. Frame: `----- Build Start: <dir> -----` …
   `-----   Build End: <dir> -----` / `----- Build FAILED (exit code N): <dir> -----` (the cause also rides the
-  `Checkf` panic to the CLI, so the exit code prints twice by design).
+  `Checkf` panic to the CLI, so the exit code prints twice by design); a task's frame reads `Task` for `Build`
+  (`runScript` derives the kind once from the config `runScriptStep` hands it, and threads it to both frame lines).
   Publish: `MoveStore(OutRoot, bldDir, plan)` with a `PublishPlan` of `bldFilterForOrNil`, `PruneDirs`,
   `ExtPrune`, `KeepLinks`, and `AllowLinks: cfg.Unsafe`. `PruneDirs` = each dep restore target strictly inside the
   unit dir
@@ -220,12 +223,20 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   are **materialized for real** (`SrcFS.MkdirAll`, never wiped); the config still records `VirtualDirMaterialized`,
   so the daemon prime makes the next clean build reject with "perhaps dirty-build output needs cleaning". No
   roundtrip caching, no early cutoff.
-- **Tasks** (`task = true`, `Doc/Specs/ScriptArgs.md` — its `task = true` half only; arguments are not implemented):
-  a dir whose script runs on **every** invocation and which publishes nothing — a deploy step, where "same inputs ⇒
-  serve the cached output" is the wrong model. Runs exactly as a build of the same dir up to and including the
-  script (deps build and cache normally — a task's own `deps.bld = ["/"]` guarantees a fresh dep output per run —
-  own source staged, `deps.cacheDir`, `unsafe`, env, cwd, interpreter and provider resolution unchanged), minus
-  everything after it. Both modes gate their cache bypass on the one predicate `mustRebuild` = `cfg.Task ||
+- **Tasks** (`task = true` / `task = ["out"]`, `Doc/Specs/ScriptArgs.md`): a dir whose script runs on **every**
+  invocation and which publishes nothing — a deploy step, where "same inputs ⇒ serve the cached output" is the
+  wrong model. Runs exactly as a build of the same dir up to and including the script (deps build and cache
+  normally — a task's own `deps.bld = ["/"]` guarantees a fresh dep output per run — own source staged,
+  `deps.cacheDir`, `unsafe`, env, cwd, interpreter and provider resolution unchanged), minus everything after it;
+  the opening line says so — `Running task:` / `Dirty-Running task:` where a build prints `Building dir:` /
+  `Dirty-Building dir:` — and so do the frame (`Task Start` / `Task End` / `Task FAILED (exit code N)`) and the
+  error breadcrumb (`... Task 'depl'` / `... Dirty task 'depl'`): `build()` defers a `c.ContextLazy` that reads
+  the config assigned after it, so a failure before the config is read still says `Build`.
+  **Arguments** are the list form's names: the caller's env vars of those names ride the safe allowlist into the
+  task's script env (`safeInheritedEnvFor`, the **Env** paragraph above) — the target dir's only, never a dep's
+  (each dir filters its own inheritance) and never a cache-key term (a task is never cached); dirty and `unsafe`
+  inherit everything anyway, so the list changes nothing there. No CLI involvement: `set out=… && bufa depl`.
+  Both modes gate their cache bypass on the one predicate `mustRebuild` = `cfg.Task.Enabled ||
   ForceRebuildFor`, so a task is forced exactly as `--force` forces (`-f` is a no-op on a task, `-F` still forces its
   deps). **Clean**: the two result getters are `alwaysMiss`, and `realBuild` returns `""` after the script instead
   of publishing — no `MoveStore`, no `B`/`∕` link, no daemon record — removing the sandbox on success as a build
@@ -241,8 +252,9 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   list, reading each dep's (cached) config **before any dep builds**; the same read each dep's `build()` does
   next, so nothing new is fetched. A task may be a `deps.src`. No new cache-key term, no store shape change;
   `Task` rides the cached config like every other field.
-  The shape checks (a task has a script; no `largeOutput`/`deps.export`/ext `export`/`[filters].bld`) are
-  BuildConfig's `checkTask` at decode — this package trusts them (**Cross-package contracts**).
+  The shape checks (a task has a script; no `largeOutput`/`deps.export`/ext `export`/`[filters].bld`; argument
+  names valid, not bufa-set, not in `[env]`) are BuildConfig's `checkTask` at decode — this package trusts them
+  (**Cross-package contracts**).
 - **Shells** (`Shell.go`, `Doc/Specs/ConfigurableShells.md`): the interpreter is a `BuildConfig.ShellDef` from one of
   two sources — the embedded **presets** `cmd` (`cleanComSpec() /D /C|/K`, `/D` skips AutoRun; prompt
   `PROMPT`=`$P$G`; verbs `move`/`copy`; in the map on Windows **only**) and `bash` (bare `bash` on bufa's PATH;
@@ -353,6 +365,10 @@ Each binds this package to another; changing either side breaks the other with n
   The task path runs the script unconditionally and returns before publish without consulting `Filters.Bld` or
   `Deps.Export`, trusting `checkTask` to have rejected a `cmd = false` or publish-side-keyed task at decode; a task
   admitted past it silently drops those settings (and a scriptless one trips `runScriptStep`'s assert).
+  `safeInheritedEnvFor` adds `Task.Args` to the allowlist **unchecked**, trusting `checkTaskArgs` to have rejected
+  a name this package's clean env overwrites after inheritance (`bufaSetEnvVars` mirrors `cleanSystemPath` +
+  `setPlatformEnv`'s names — adding a bufa-set var here means adding it there) or one the dir's `[env]` would
+  override.
 - [FilterFiles](../FilterFiles/CLAUDE.md) — `srcFiltersOverride`'s unanchored `-*.BUFA` depends on
   `normalizePattern`'s implicit `**/` prefix and on `*` matching an **empty** run; `bldFilterForOrNil` returns nil
   rather than `Compile(nil)` because a zero-rule filter excludes everything.

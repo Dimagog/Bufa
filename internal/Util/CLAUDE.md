@@ -3,7 +3,8 @@
 Package guidance. Repo-wide conventions: [CLAUDE.md](../../CLAUDE.md).
 
 - `Nothing` (`= struct{}`, for empty RPC args/replies and done channels), `Set[T]` (`map[T]Nothing` with
-  `NewSet`/`Add`/`Remove`/`Contains`), the map interface family (`IMap`/`IMutMap`/`ILen`/`IMapLen`/`IMutMapLen`) +
+  `NewSet`/`NewSetOf`/`Add`/`Remove`/`Contains`), the map interface family
+  (`IMap`/`IMutMap`/`ILen`/`IMapLen`/`IMutMapLen`) +
   `Map[K, V]` (plain `map`-backed; Cache aliases `Map` and `IMutMap` as its `Map`/`Cache`), `OrderedMap[K, V]`
   (insertion-ordered, private fields: `Get`/`Set`/`Len`/`All`/`Keys`, `Set` keeping a known key's position,
   `Reorder(keys)` — must be a permutation of the current keys; zero value usable; no delete, no equality — flatten

@@ -180,13 +180,13 @@ func (b *BuilderBase) effectiveBldDeps(srcDir string, cfg BuildConfig.BufaConfig
 		deps = slices.Concat(cfg.Deps.Bld, []string{shell})
 	}
 	for _, dep := range deps {
-		c.Require(!b.getBuildConfig(dep).Task, "'%s' is a task and cannot be a build dependency of '%s'", dep, srcDir)
+		c.Require(!b.getBuildConfig(dep).Task.Enabled, "'%s' is a task and cannot be a build dependency of '%s'", dep, srcDir)
 	}
 	return deps
 }
 
 func (b *BuilderBase) mustRebuild(srcDir string, cfg BuildConfig.BufaConfig) bool {
-	return cfg.Task || b.ForceRebuildFor(srcDir)
+	return cfg.Task.Enabled || b.ForceRebuildFor(srcDir)
 }
 
 func depsHashes(srcDir, kind string, deps []string, getHash func(string) string) ([]Hashing.NamedEntry, string) {
@@ -315,7 +315,7 @@ func (b *BuilderBase) runScriptStep(srcDir, osDir string, env *Env, cfg BuildCon
 		cmd.Dir = osDir
 		cmd.Env = env.Environ()
 		slog.Info("Running build script", "dir", srcDir, "shell", shell.Name, "script", script)
-		b.runScript(srcDir, cmd)
+		b.runScript(srcDir, cfg, cmd)
 		// Success only: a failure keeps the script for debugging, as does a session below.
 		c.Check(b.BldFS.RemoveAll(Store.TmpRoot))
 	} else {
@@ -360,55 +360,63 @@ func (b *BuilderBase) runInteractiveShell(srcDir, osDir string, env *Env, script
 }
 
 // Both streams share one writer value, so os/exec serializes their writes.
-func (b *BuilderBase) runScript(srcDir string, cmd *exec.Cmd) {
+func (b *BuilderBase) runScript(srcDir string, cfg BuildConfig.BufaConfig, cmd *exec.Cmd) {
+	kind := buildOrTask(cfg, "Build", "Task")
 	var err error
 	if b.ShowOutputFor(srcDir) {
-		err = b.runScriptStreaming(srcDir, cmd)
+		err = b.runScriptStreaming(srcDir, kind, cmd)
 	} else {
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		cmd.Stderr = &out
 		err = cmd.Run()
 		if err != nil {
-			b.writeScriptOutput(srcDir, out.Bytes(), err)
+			b.writeScriptOutput(srcDir, kind, out.Bytes(), err)
 		}
 	}
 	c.Checkf(err, "run %s", Store.BuildConfigName)
 }
 
-func (b *BuilderBase) runScriptStreaming(srcDir string, cmd *exec.Cmd) error {
-	b.writeFrameHeader(srcDir)
+func (b *BuilderBase) runScriptStreaming(srcDir, kind string, cmd *exec.Cmd) error {
+	b.writeFrameHeader(srcDir, kind)
 	// os/exec unwraps an *os.File and hands the child the fd itself — no pipe, real console.
 	cmd.Stdout = b.Out
 	cmd.Stderr = b.Out
 	err := cmd.Run()
 	fmt.Fprintln(b.Out)
-	b.writeFrameFooter(srcDir, err)
+	b.writeFrameFooter(srcDir, kind, err)
 	return err
 }
 
-func (b *BuilderBase) writeScriptOutput(srcDir string, output []byte, err error) {
-	b.writeFrameHeader(srcDir)
+func (b *BuilderBase) writeScriptOutput(srcDir, kind string, output []byte, err error) {
+	b.writeFrameHeader(srcDir, kind)
 	b.Out.Write(output)
 	if n := len(output); n > 0 && output[n-1] != '\n' {
 		fmt.Fprintln(b.Out)
 	}
-	b.writeFrameFooter(srcDir, err)
+	b.writeFrameFooter(srcDir, kind, err)
 }
 
-func (b *BuilderBase) writeFrameHeader(srcDir string) {
-	fmt.Fprintf(b.Out, "----- Build Start: %s -----\n", srcDir)
+func buildOrTask(cfg BuildConfig.BufaConfig, build, task string) string {
+	if cfg.Task.Enabled {
+		return task
+	}
+	return build
 }
 
-func (b *BuilderBase) writeFrameFooter(srcDir string, err error) {
+func (b *BuilderBase) writeFrameHeader(srcDir, kind string) {
+	fmt.Fprintf(b.Out, "----- %s Start: %s -----\n", kind, srcDir)
+}
+
+func (b *BuilderBase) writeFrameFooter(srcDir, kind string, err error) {
 	var exitErr *exec.ExitError
 	switch {
 	case err == nil:
-		fmt.Fprintf(b.Out, "-----   Build End: %s -----\n", srcDir)
+		fmt.Fprintf(b.Out, "-----   %s End: %s -----\n", kind, srcDir)
 	case errors.As(err, &exitErr):
-		fmt.Fprintf(b.Out, "----- Build FAILED (exit code %d): %s -----\n", exitErr.ExitCode(), srcDir)
+		fmt.Fprintf(b.Out, "----- %s FAILED (exit code %d): %s -----\n", kind, exitErr.ExitCode(), srcDir)
 	default:
-		fmt.Fprintf(b.Out, "----- Build FAILED: %s -----\n", srcDir)
+		fmt.Fprintf(b.Out, "----- %s FAILED: %s -----\n", kind, srcDir)
 	}
 }
 

@@ -2,6 +2,7 @@ package Build
 
 import (
 	"iter"
+	"maps"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -26,6 +27,17 @@ var safeInheritedEnv = func() Util.Set[string] {
 	}
 	return keep
 }()
+
+func safeInheritedEnvFor(taskArgs []string) Util.Set[string] {
+	if len(taskArgs) == 0 {
+		return safeInheritedEnv
+	}
+	keep := maps.Clone(safeInheritedEnv)
+	for _, name := range taskArgs {
+		keep.Add(foldEnvName(name))
+	}
+	return keep
+}
 
 func (b *BuilderBase) resolveEnvVars(srcDir string, envVars envTable, virtualDir bool) {
 	if envVars.Len() == 0 {

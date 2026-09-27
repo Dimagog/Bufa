@@ -119,6 +119,15 @@ func Context(format string, args ...any) {
 	panic(fmt.Errorf("... %s\n%w", msg, PanicToError(r)))
 }
 
+// Context whose message is built only if a panic is in flight — for a breadcrumb naming state set after the defer.
+func ContextLazy(msg func() string) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	panic(fmt.Errorf("... %s\n%w", msg(), PanicToError(r)))
+}
+
 func PanicToError(r any) error {
 	switch v := r.(type) {
 	case nil:

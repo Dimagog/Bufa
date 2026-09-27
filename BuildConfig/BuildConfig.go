@@ -26,7 +26,7 @@ type BaseConfig struct {
 	Filters     Filters          `toml:"filters"`
 	LargeOutput bool             `toml:"largeOutput"`
 	Shell       string           `toml:"shell"`
-	Task        bool             `toml:"task"`
+	Task        Task             `toml:"task"`
 	Unsafe      bool             `toml:"unsafe"`
 }
 
@@ -141,6 +141,32 @@ func (cmd *Cmd) UnmarshalTOML(data any) error {
 	}
 }
 
+type Task struct {
+	Enabled bool     // task = true or a list
+	Args    []string // task = ["out"]: caller env vars let through to the script
+}
+
+func (t *Task) UnmarshalTOML(data any) error {
+	switch d := data.(type) {
+	case bool:
+		t.Enabled = d
+		return nil
+	case []any:
+		t.Enabled = true
+		t.Args = make([]string, len(d))
+		for i, v := range d {
+			name, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("task argument names must be strings, got %T", v)
+			}
+			t.Args[i] = name
+		}
+		return nil
+	default:
+		return fmt.Errorf("task must be true, false, or a list of argument names, got %T", data)
+	}
+}
+
 type EnvVar struct {
 	Value string // literal:      X = "4.13.2"
 	File  string // file-sourced: X = { file = "antlr.ver" }
@@ -181,12 +207,17 @@ func CheckEnvVarNames[V EnvValue](envVars EnvTable[V]) {
 	// seen set is needed because it's case-insensitive
 	seen := Util.NewSet[string]()
 	for key := range envVars.Keys() {
-		c.Require(key != "", "[env] variable name must not be empty")
-		folded := strings.ToLower(key)
-		c.Require(!seen.Contains(folded), "duplicate [env] variable '%s'", key)
-		seen.Add(folded)
-		c.Require(!strings.HasPrefix(folded, "bufa_"), "[env] variable '%s' uses bufa's reserved BUFA_ prefix", key)
+		checkVarName("[env] variable", key, seen)
 	}
+}
+
+func checkVarName(kind, name string, seen Util.Set[string]) string {
+	c.Require(name != "", "%s name must not be empty", kind)
+	folded := strings.ToLower(name)
+	c.Require(!seen.Contains(folded), "duplicate %s '%s'", kind, name)
+	seen.Add(folded)
+	c.Require(!strings.HasPrefix(folded, "bufa_"), "%s '%s' uses bufa's reserved BUFA_ prefix", kind, name)
+	return folded
 }
 
 func NormalizeEnvVarValue(key, value string) string {
@@ -308,13 +339,31 @@ func (cfg *BufaConfig) IsScriptOptional() bool {
 }
 
 func (cfg *BufaConfig) checkTask() {
-	if cfg.Task {
+	if cfg.Task.Enabled {
 		c.Require(!cfg.Cmd.Disabled, "a task must have a script: task = true with cmd = false does nothing")
 		c.Require(!cfg.LargeOutput, "a task publishes nothing: task = true with largeOutput is an error")
 		c.Require(len(cfg.Deps.Export) == 0, "a task publishes nothing: task = true with deps.export is an error")
 		c.Require(!slices.ContainsFunc(cfg.Deps.Ext, func(dep ExtDep) bool { return dep.Export }),
 			"a task publishes nothing: task = true with a [[deps.ext]] export = true is an error")
 		c.Require(len(cfg.Filters.Bld) == 0, "a task publishes nothing: task = true with [filters].bld is an error")
+		cfg.checkTaskArgs()
+	}
+}
+
+// Build's clean-mode env sets these after inheritance (cleanSystemPath, setPlatformEnv), so a let-through is a lie.
+var bufaSetEnvVars = Util.NewSetOf("path", "temp", "tmp", "pathext", "comspec", "home", "tmpdir")
+
+func (cfg *BufaConfig) checkTaskArgs() {
+	if len(cfg.Task.Args) == 0 {
+		return
+	}
+	seen := Util.NewSet[string]()
+	for _, name := range cfg.Task.Args {
+		folded := checkVarName("task argument", name, seen)
+		c.Require(!bufaSetEnvVars.Contains(folded), "task argument '%s' is a variable bufa sets itself", name)
+	}
+	for key := range cfg.Env.Keys() {
+		c.Require(!seen.Contains(strings.ToLower(key)), "'%s' is both a task argument and an [env] variable", key)
 	}
 }
 

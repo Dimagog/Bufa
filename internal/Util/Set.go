@@ -20,3 +20,11 @@ func (s Set[T]) Contains(value T) bool {
 	_, ok := s[value]
 	return ok
 }
+
+func NewSetOf[T comparable](values ...T) Set[T] {
+	s := make(Set[T], len(values))
+	for _, v := range values {
+		s.Add(v)
+	}
+	return s
+}

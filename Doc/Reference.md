@@ -39,24 +39,24 @@ a script.
 
 All keys, with their defaults:
 
-| Key                  | What                     | Type                | Default        | Platform fold |
-| -------------------- | ------------------------ | ------------------- | -------------- | ------------- |
-| `cmd`                | the build script         | string or `false`   | absent         | replace       |
-| `shell`              | shell running `cmd`      | string              | `""` (inherit) | replace       |
-| `unsafe`             | non-hermetic build       | bool                | `false`        | replace       |
-| `largeOutput`        | consumers link, not copy | bool                | `false`        | replace       |
-| `task`               | run every time, no output| bool                | `false`        | replace       |
-| `deps.src`           | source deps              | list of paths       | `[]`           | append        |
-| `deps.bld`           | built deps               | list of paths       | `[]`           | append        |
-| `[[deps.ext]]`       | pinned downloads         | list of tables      | `[]`           | append        |
-| `deps.export`        | deps shipped in output   | list of paths/names | `[]`           | append        |
-| `deps.cacheDir`      | persistent cache dir     | bool                | `false`        | replace       |
-| `[env]`              | script env vars          | table               | empty          | merge per key |
-| `filters.src`        | what is source           | list of rules       | `["-.**"]`     | append        |
-| `filters.bld`        | what is output           | list of rules       | `[]`           | append        |
-| `filters.dirty`      | what dirty mode hashes   | list of rules       | `["-.**"]`     | append        |
-| `[windows]`/`[unix]` | per-platform overrides   | table               | empty          | —             |
-| `[linux]`/`[macos]`  | per-OS overrides on Unix | table               | empty          | —             |
+| Key                  | What                      | Type                  | Default        | Platform fold |
+| -------------------- | ------------------------- | --------------------- | -------------- | ------------- |
+| `cmd`                | the build script          | string or `false`     | absent         | replace       |
+| `shell`              | shell running `cmd`       | string                | `""` (inherit) | replace       |
+| `unsafe`             | non-hermetic build        | bool                  | `false`        | replace       |
+| `largeOutput`        | consumers link, not copy  | bool                  | `false`        | replace       |
+| `task`               | run every time, no output | bool or list of names | `false`        | replace       |
+| `deps.src`           | source deps               | list of paths         | `[]`           | append        |
+| `deps.bld`           | built deps                | list of paths         | `[]`           | append        |
+| `[[deps.ext]]`       | pinned downloads          | list of tables        | `[]`           | append        |
+| `deps.export`        | deps shipped in output    | list of paths/names   | `[]`           | append        |
+| `deps.cacheDir`      | persistent cache dir      | bool                  | `false`        | replace       |
+| `[env]`              | script env vars           | table                 | empty          | merge per key |
+| `filters.src`        | what is source            | list of rules         | `["-.**"]`     | append        |
+| `filters.bld`        | what is output            | list of rules         | `[]`           | append        |
+| `filters.dirty`      | what dirty mode hashes    | list of rules         | `["-.**"]`     | append        |
+| `[windows]`/`[unix]` | per-platform overrides    | table                 | empty          | —             |
+| `[linux]`/`[macos]`  | per-OS overrides on Unix  | table                 | empty          | —             |
 
 ### `cmd`
 
@@ -148,11 +148,29 @@ cmd = '$BUFA_COPY_OR_MOVE ../bufa ~/bin'
 
 `bufa deploy` builds `/` (cached as usual), stages `deploy` exactly as a build would — deps, own source, the
 [hermetic environment](#set-for-build-scripts), cwd, shell — and runs its script. Then, instead of publishing and
-printing a `Build result:` line, it prints `Task succeeded`; a failing script fails the run exactly as a build's would.
+printing a `Build result:` line, it prints `Task succeeded`; a failing task script fails the run exactly as a build's would.
 A task is never a cache hit in either build mode and under any flag: `--force` is a no-op on it,
 `--force-all` still forces its deps; a dirty task records no skip hash. `--shell`/`--post-shell` open its shell as
 for any dir, printing no result line. A task's own `deps.bld = ["/"]` is what guarantees a fresh dependency output
 on every run.
+
+**Arguments.** A task may take per-invocation values from the caller's environment. `task = ["out"]` is a task
+whose script sees the caller's `out` env variable — the one deliberate hole in the
+[hermetic environment](#set-for-build-scripts), which otherwise inherits next to nothing:
+
+```toml
+# deploy.BUFA
+task = ["out"]
+deps.bld = ["/"]
+
+cmd = '$BUFA_COPY_OR_MOVE ../bufa "$out"'
+```
+
+`out=~/bin bufa deploy` (`set out=C:\Bin && bufa deploy` under cmd) runs the script with `out` set as typed: no
+trimming, no expansion, no path resolution. A declared variable the caller did not set is simply absent — the script
+tests for it like any other. The names reach the task's own script and shell session only: the dirs the task depends on keep their hermetic environment, and no name or value ever enters a cache key (a task is never cached).
+`task = []` is the same as `task = true`. Under `unsafe = true` and in dirty mode the script inherits the whole
+environment anyway, so the list changes nothing there.
 
 The following are all config errors:
 
@@ -161,10 +179,13 @@ The following are all config errors:
   `[filters].bld` are not allowed.
 * A task cannot be anyone's `deps.bld` dependency or shell provider — it has no output to depend on. It may be a
   `deps.src` dependency (its source tree only), and may itself list `deps.bld` and `deps.src`.
+* An argument name follows the [`[env]` name rules](#env): non-empty, unique ignoring case, never the `BUFA_` prefix. It
+  also must not be one Bufa sets itself (`PATH`, `TEMP`, `TMP`, `PATHEXT`, `ComSpec`, `HOME`, `TMPDIR`) or one the dir's
+  own `[env]` defines — either would silently override the caller's value.
 
-A raw-script `BUFA` is never a task. Like every other scalar, `task`
-[replaces per platform](#platform-sections-windows--unix--linux--macos): `[windows] task = false` turns a root task
-off on Windows.
+A raw-script `BUFA` is never a task. Like every other scalar, `task` [replaces per
+platform](#platform-sections-windows--unix--linux--macos) as a whole (names never concatenate): `[windows] task = false`
+turns a root task off on Windows.
 
 ### `[deps]`
 
@@ -496,7 +517,8 @@ disposable copies but dirty-mode deps are the real source tree. **EXCEPT** the d
 
 A clean, safe build (the default) starts from a scrubbed environment:
 
-* **Inherited:** on Windows only `OS`, `SystemDrive`, `SystemRoot`, and `windir`; on Unix nothing at all.
+* **Inherited:** on Windows only `OS`, `SystemDrive`, `SystemRoot`, and `windir`; on Unix nothing at all — plus, for
+  a task, the variables its [`task` list](#task) names.
 * **`PATH`:** on Windows `%SystemRoot%\System32`, `%SystemRoot%`, `%SystemRoot%\System32\Wbem`, and
   `%SystemRoot%\System32\WindowsPowerShell\v1.0`; on Unix `/usr/bin:/bin:/usr/sbin:/sbin`.
 * **`TEMP` and `TMP`** (Windows) or **`TMPDIR`** (Unix): the store's `tmp/` dir, recreated empty before every script,

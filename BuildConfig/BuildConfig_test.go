@@ -206,34 +206,44 @@ func TestCmdDisabled(t *testing.T) {
 }
 
 func TestTask_Decode(t *testing.T) {
-	if cfg := decode(t, "task = true\ncmd = 'x'\n"); !cfg.Task {
-		t.Error("task = true must decode as a task")
+	if cfg := decode(t, "task = true\ncmd = 'x'\n"); !cfg.Task.Enabled || cfg.Task.Args != nil {
+		t.Errorf("task = true must decode as an argument-less task: %+v", cfg.Task)
 	}
-	if cfg := decode(t, "task = false\ncmd = 'x'\n"); cfg.Task {
+	if cfg := decode(t, "task = false\ncmd = 'x'\n"); cfg.Task.Enabled {
 		t.Error("task = false must not be a task")
 	}
-	if cfg := decode(t, "cmd = 'x'\n"); cfg.Task {
+	if cfg := decode(t, "cmd = 'x'\n"); cfg.Task.Enabled {
 		t.Error("absent task must not be a task")
 	}
-	var cfg BufaConfig
-	if err := c.Rescue(func() { DecodeConfigOrScript([]byte("task = ['out']\ncmd = 'x'\n"), "BUFA", &cfg) }); err == nil {
-		t.Error("a non-bool task must fail to decode")
+	if cfg := decode(t, "task = []\ncmd = 'x'\n"); !cfg.Task.Enabled || len(cfg.Task.Args) != 0 {
+		t.Errorf("task = [] must decode as an argument-less task: %+v", cfg.Task)
+	}
+	if cfg := decode(t, "task = ['out', 'Mode']\ncmd = 'x'\n"); !cfg.Task.Enabled || !slices.Equal(cfg.Task.Args, []string{"out", "Mode"}) {
+		t.Errorf("task = [names] must keep the names in order: %+v", cfg.Task)
+	}
+	for _, doc := range []string{"task = 'out'\ncmd = 'x'\n", "task = [1]\ncmd = 'x'\n", "task = 1\ncmd = 'x'\n"} {
+		var cfg BufaConfig
+		if err := c.Rescue(func() { DecodeConfigOrScript([]byte(doc), "BUFA", &cfg) }); err == nil {
+			t.Errorf("%q must fail to decode", doc)
+		}
 	}
 }
 
 func TestTask_PlatformFoldReplacesWholeValue(t *testing.T) {
 	cases := []struct {
 		name, doc string
-		task      bool
+		task      Task
 	}{
-		{name: "explicit false beats root true", doc: "task = true\ncmd = 'x'\n" + bothSections(platTable("", "task = false\n")), task: false},
-		{name: "explicit true beats root false", doc: "cmd = 'x'\n" + bothSections(platTable("", "task = true\n")), task: true},
-		{name: "absent key keeps root", doc: "task = true\ncmd = 'x'\n" + bothSections(platTable("", "cmd = 'y'\n")), task: true},
+		{name: "explicit false beats root true", doc: "task = true\ncmd = 'x'\n" + bothSections(platTable("", "task = false\n")), task: Task{}},
+		{name: "explicit true beats root false", doc: "cmd = 'x'\n" + bothSections(platTable("", "task = true\n")), task: Task{Enabled: true}},
+		{name: "absent key keeps root", doc: "task = true\ncmd = 'x'\n" + bothSections(platTable("", "cmd = 'y'\n")), task: Task{Enabled: true}},
+		{name: "list replaces root list whole", doc: "task = ['a', 'b']\ncmd = 'x'\n" + bothSections(platTable("", "task = ['c']\n")), task: Task{Enabled: true, Args: []string{"c"}}},
+		{name: "false drops root list", doc: "task = ['a']\ncmd = 'x'\n" + bothSections(platTable("", "task = false\n")), task: Task{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if cfg := decode(t, tc.doc); cfg.Task != tc.task {
-				t.Errorf("Task = %v, want %v", cfg.Task, tc.task)
+			if cfg := decode(t, tc.doc); cfg.Task.Enabled != tc.task.Enabled || !slices.Equal(cfg.Task.Args, tc.task.Args) {
+				t.Errorf("Task = %+v, want %+v", cfg.Task, tc.task)
 			}
 		})
 	}
@@ -260,11 +270,34 @@ func TestTask_RejectsScriptlessAndPublishSideKeys(t *testing.T) {
 		})
 	}
 	// The platform fold switching the task off makes the same keys legal again.
-	if cfg := decode(t, "task = true\ncmd = 'x'\nlargeOutput = true\n"+bothSections(platTable("", "task = false\n"))); cfg.Task || !cfg.LargeOutput {
+	if cfg := decode(t, "task = true\ncmd = 'x'\nlargeOutput = true\n"+bothSections(platTable("", "task = false\n"))); cfg.Task.Enabled || !cfg.LargeOutput {
 		t.Errorf("task = false in a section must unmake the task: %+v", cfg.BaseConfig)
 	}
 	// Non-publish keys stay legal.
 	decode(t, "task = true\ncmd = 'x'\nunsafe = true\ndeps.cacheDir = true\n[deps]\nbld = ['/a']\nsrc = ['/b']\n"+ext+"[filters]\nsrc = ['-*.md']\ndirty = ['-out/']\n")
+}
+
+// Name rules are checked against the folded [env] view: a platform section's entry clashes too.
+func TestTask_RejectsBadArgNames(t *testing.T) {
+	for _, tc := range []struct{ name, doc, want string }{
+		{name: "empty", doc: "task = ['']\ncmd = 'x'\n", want: "task argument name must not be empty"},
+		{name: "duplicate case-folded", doc: "task = ['out', 'OUT']\ncmd = 'x'\n", want: "duplicate task argument 'OUT'"},
+		{name: "BUFA_ prefix", doc: "task = ['bufa_x']\ncmd = 'x'\n", want: "reserved BUFA_ prefix"},
+		{name: "bufa-set PATH", doc: "task = ['Path']\ncmd = 'x'\n", want: "task argument 'Path' is a variable bufa sets itself"},
+		{name: "bufa-set HOME", doc: "task = ['HOME']\ncmd = 'x'\n", want: "bufa sets itself"},
+		{name: "in [env]", doc: "task = ['out']\ncmd = 'x'\n[env]\nOut = 'x'\n", want: "'Out' is both a task argument and an [env] variable"},
+		{name: "in platform [env]", doc: "task = ['out']\ncmd = 'x'\n" + bothSections(platTable(".env", "out = 'x'\n")), want: "both a task argument and an [env] variable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var cfg BufaConfig
+			err := c.Rescue(func() { DecodeConfigOrScript([]byte(tc.doc), "BUFA", &cfg) })
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("want error containing %q, got %v", tc.want, err)
+			}
+		})
+	}
+	// Names are only checked on a task: a section switching it off makes the clash moot.
+	decode(t, "task = ['out']\ncmd = 'x'\n[env]\nout = 'x'\n"+bothSections(platTable("", "task = false\n")))
 }
 
 func TestApplyPlatformSettings_EnvMergePlatformWins(t *testing.T) {

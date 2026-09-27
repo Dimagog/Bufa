@@ -142,8 +142,10 @@ Everything else goes. Explicitly:
   `toml:"-"` fields (`Hash`, `VirtualDir`, `VirtualDirMaterialized`) vs user-settable ones, the ordered `EnvTable[V]`
   both `[env]` tables decode into (document order restored from `toml.MetaData.Keys()` inside the gateway, a platform
   override keeping its top-level position), the `cmd` string-or-`false` union (`cmd = false` ⇒ a deliberately
-  scriptless stage+publish dir — the only script-optional opt-in), the `task` bool (presence fold; `checkTask`
-  after the fold rejects a task with `cmd = false` or any publish-side key), `deps.ext`/`deps.export`/
+  scriptless stage+publish dir — the only script-optional opt-in), the `task` bool-or-list union (whole-value
+  presence fold; the list names caller env vars let through; `checkTask` after the fold rejects a task with
+  `cmd = false` or any publish-side key, and an argument name that is invalid, bufa-set, or in `[env]`),
+  `deps.ext`/`deps.export`/
   `deps.cacheDir`/`largeOutput`/`shell`/`[env]` semantics with `EnvVar`'s literal-vs-`{ file }` dispatch, the
   `[windows]`/`[unix]`/`[linux]`/`[macos]` fold tree (four top-level tables; `root ← [unix] ← [linux] | [macos]`
   via `PlatformSections`, same rules at each level — presence-not-truthiness scalars incl. `shell` and
@@ -173,8 +175,9 @@ Everything else goes. Explicitly:
 - [Build](Build/CLAUDE.md) — clean + dirty builders: the `B<combined>` cache-key terms (config/deps/platform/the root
   marker's `GetHash()` — whole `[env]` table + `shell` default + bufa `x.y` version/`unsafe` TTL bucket),
   **tasks** (`task = true`: getters `alwaysMiss` in both modes, `""` returned after the script so nothing publishes
-  or records — cmd/bufa prints the `Task succeeded` line, not Build — and the task-in-`deps.bld`/shell-provider hard
-  error raised over the final dep list before any dep builds),
+  or records — cmd/bufa prints the `Task succeeded` line, not Build — the task-in-`deps.bld`/shell-provider hard
+  error raised over the final dep list before any dep builds, and `task = ["out"]` arguments as caller env vars
+  added to the safe-inheritance allowlist of the task dir alone),
   ancestors-first
   staging and `largeOutput` link
   staging with its

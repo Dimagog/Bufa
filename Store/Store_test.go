@@ -940,7 +940,7 @@ func TestMove_PruneDirsNilFilter(t *testing.T) {
 	writeFile(t, want, filepath.Join("u", "out.txt"), []byte("OUT"))
 
 	s := NewStore(fsys)
-	prune := Util.Set[string]{"tool": {}, "a/b": {}, "../sibling": {}, "gone": {}}
+	prune := Util.NewSetOf("tool", "a/b", "../sibling", "gone")
 	key := s.MoveStore(OutRoot, filepath.Join("bld", "u"), PublishPlan{PruneDirs: prune, AllowLinks: true})
 	if key != Hashing.HashDir(want, "u") {
 		t.Errorf("move key = %q, want %q (staged deps pruned)", key, Hashing.HashDir(want, "u"))
@@ -970,7 +970,7 @@ func TestMove_PruneDirsWithFilter(t *testing.T) {
 
 	s := NewStore(fsys)
 	key := s.MoveStore(OutRoot, filepath.Join("bld", "u"),
-		PublishPlan{Filter: compile("+**", "-*.log"), PruneDirs: Util.Set[string]{"tool": {}}, AllowLinks: true})
+		PublishPlan{Filter: compile("+**", "-*.log"), PruneDirs: Util.NewSetOf("tool"), AllowLinks: true})
 	if key != Hashing.HashDir(want, "u") {
 		t.Errorf("move key = %q, want %q (dep pruned + junk filtered)", key, Hashing.HashDir(want, "u"))
 	}
@@ -991,7 +991,7 @@ func TestMove_PruneDirsRemovesFileAtPrunedPath(t *testing.T) {
 	writeFile(t, fsys, filepath.Join("bld", "u", "tool"), []byte("SCRIPT-MADE"))
 
 	s := NewStore(fsys)
-	key := s.MoveStore(OutRoot, filepath.Join("bld", "u"), PublishPlan{PruneDirs: Util.Set[string]{"tool": {}}, AllowLinks: true})
+	key := s.MoveStore(OutRoot, filepath.Join("bld", "u"), PublishPlan{PruneDirs: Util.NewSetOf("tool"), AllowLinks: true})
 	if exists(t, fsys, filepath.Join(OutRoot, key, "tool")) {
 		t.Error("pruneDirs is kind-blind: a file at a pruned path must not publish")
 	}
@@ -1012,7 +1012,7 @@ func TestMove_ExtPruneRemovesOccupantAndSweepsParents(t *testing.T) {
 	c.Check(want.MkdirAll(filepath.Join("u", "empty"), 0o755))
 
 	s := NewStore(fsys)
-	extPrune := Util.Set[string]{"libs/art.bin": {}, "gone/sub": {}}
+	extPrune := Util.NewSetOf("libs/art.bin", "gone/sub")
 	key := s.MoveStore(OutRoot, filepath.Join("bld", "u"), PublishPlan{ExtPrune: extPrune, AllowLinks: true})
 	if key != Hashing.HashDir(want, "u") {
 		t.Errorf("move key = %q, want %q", key, Hashing.HashDir(want, "u"))

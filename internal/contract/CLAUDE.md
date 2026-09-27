@@ -3,7 +3,8 @@
 Package guidance. Repo-wide conventions: [CLAUDE.md](../../CLAUDE.md).
 
 - Panic-based pre/post-conditions + error handling: `Require`/`Assert`/`Fail`/`Check`/`Checkf`/`Check2`/`Error`/
-  `Errorf` (library funcs panic), `Catch`/`Rescue` (CLI `run()` does `defer Catch(&err)`), `Context("ctx", …)`
+  `Errorf` (library funcs panic), `Catch`/`Rescue` (CLI `run()` does `defer Catch(&err)`), `Context("ctx", …)` +
+  `ContextLazy(func() string)` (message built at panic time, so it can name state assigned after the defer)
   (deferred panic-annotator prepending context as a panic unwinds), `PanicToError`. `With("ctx", …).Check2(v, err)`
   is the context-carrying Check2 (a generic method) — two calls because Go forbids extra args alongside a
   multi-value call. Every failing check logs an Error record before panicking, gated on the handler's level first —

@@ -112,6 +112,24 @@ func TestContext_NoPanicIsNoOp(t *testing.T) {
 	}
 }
 
+// The message sees state assigned after the defer, and is never built when nothing panics.
+func TestContextLazy_LateStateAndNoPanicIsNoOp(t *testing.T) {
+	built := false
+	if r := mustPanic(t, func() { ContextLazy(func() string { built = true; return "ctx" }) }); r != nil || built {
+		t.Errorf("ContextLazy with no panic in flight: panic %v, built %v", r, built)
+	}
+	kind := "build"
+	frame := func() {
+		defer ContextLazy(func() string { return kind + " '/a'" })
+		kind = "task"
+		Fail("boom")
+	}
+	r := mustPanic(t, frame)
+	if err, ok := r.(error); !ok || !strings.HasPrefix(err.Error(), "... task '/a'\n") || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("panic = %v, want the late kind in the breadcrumb", r)
+	}
+}
+
 func TestContext_WrapsAndPreservesChain(t *testing.T) {
 	sentinel := errors.New("no such file")
 	frame := func() {

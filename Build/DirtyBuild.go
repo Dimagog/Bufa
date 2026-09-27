@@ -88,10 +88,13 @@ func (b *DirtyBuilder) Build(srcDir string) string {
 }
 
 func (b *DirtyBuilder) build(srcDir string) string {
-	defer c.Context("Dirty build '%s'", srcDir)
+	var buildConfig BuildConfig.BufaConfig
+	defer c.ContextLazy(func() string {
+		return fmt.Sprintf("%s '%s'", buildOrTask(buildConfig, "Dirty build", "Dirty task"), srcDir)
+	})
 	defer b.circDepsCheck(srcDir)()
 
-	buildConfig := b.getBuildConfig(srcDir)
+	buildConfig = b.getBuildConfig(srcDir)
 	shell := b.shellFor(srcDir, buildConfig)
 
 	bldDeps := b.effectiveBldDeps(srcDir, buildConfig, shell)
@@ -127,7 +130,7 @@ func (b *DirtyBuilder) build(srcDir string) string {
 	}
 
 	if b.mustRebuild(srcDir, buildConfig) {
-		slog.Info("Bypassing skip hashes", "dir", srcDir, "task", buildConfig.Task)
+		slog.Info("Bypassing skip hashes", "dir", srcDir, "task", buildConfig.Task.Enabled)
 		storeCheckSkipHash = alwaysMiss
 		daemonCheckSkipHash = alwaysMiss
 	}
@@ -171,7 +174,7 @@ func (b *DirtyBuilder) realDirtyBuild(
 	shell string,
 	bldDeps []string,
 ) string {
-	fmt.Fprintln(b.Out, "Dirty-Building dir:", srcDir)
+	fmt.Fprintln(b.Out, buildOrTask(buildConfig, "Dirty-Building dir:", "Dirty-Running task:"), srcDir)
 
 	if buildConfig.VirtualDir {
 		c.Check(b.SrcFS.MkdirAll(srcDir, 0o755))
@@ -193,8 +196,8 @@ func (b *DirtyBuilder) realDirtyBuild(
 		b.runDirtyBuildScript(srcDir, buildConfig, shell, bldDeps)
 	}
 
-	if b.ShellSessionFor(srcDir) || buildConfig.Task {
-		slog.Info("Nothing to record", "dir", srcDir, "task", buildConfig.Task)
+	if b.ShellSessionFor(srcDir) || buildConfig.Task.Enabled {
+		slog.Info("Nothing to record", "dir", srcDir, "task", buildConfig.Task.Enabled)
 		return ""
 	}
 

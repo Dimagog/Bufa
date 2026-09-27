@@ -109,10 +109,11 @@ func (b *Builder) Build(srcDir string) string {
 }
 
 func (b *Builder) build(srcDir string) string {
-	defer c.Context("Build '%s'", srcDir)
+	var buildConfig BuildConfig.BufaConfig
+	defer c.ContextLazy(func() string { return fmt.Sprintf("%s '%s'", buildOrTask(buildConfig, "Build", "Task"), srcDir) })
 	defer b.circDepsCheck(srcDir)()
 
-	buildConfig := b.getBuildConfig(srcDir)
+	buildConfig = b.getBuildConfig(srcDir)
 	shell := b.shellFor(srcDir, buildConfig)
 
 	bldDeps := b.effectiveBldDeps(srcDir, buildConfig, shell)
@@ -152,7 +153,7 @@ func (b *Builder) build(srcDir string) string {
 	}
 
 	if b.mustRebuild(srcDir, buildConfig) {
-		slog.Info("Bypassing build caches", "dir", srcDir, "task", buildConfig.Task)
+		slog.Info("Bypassing build caches", "dir", srcDir, "task", buildConfig.Task.Enabled)
 		storeGetBuildHash = alwaysMiss
 		daemonGetBuildHash = alwaysMiss
 	}
@@ -188,7 +189,7 @@ func (b *Builder) realBuild(
 	buildConfig BuildConfig.BufaConfig,
 	shell string,
 ) string {
-	fmt.Fprintln(b.Out, "Building dir:", srcDir)
+	fmt.Fprintln(b.Out, buildOrTask(buildConfig, "Building dir:", "Running task:"), srcDir)
 	bldDir := filepath.Join(Store.BldSandboxRoot, srcDir)
 
 	type stageDir struct {
@@ -274,7 +275,7 @@ func (b *Builder) realBuild(
 	}
 
 	buildHash := ""
-	if buildConfig.Task {
+	if buildConfig.Task.Enabled {
 		slog.Info("Task done — nothing to publish", "dir", srcDir)
 	} else {
 		extPrune, keepLinks := extDepPublishPlan(buildConfig, exportDeps)
@@ -302,7 +303,7 @@ func (b *Builder) runBuildScript(srcDir, bldDir string, cfg BuildConfig.BufaConf
 	osTmpDir := filepath.Join(b.BldRoot, Store.TmpRoot)
 	osSandboxRoot := filepath.Join(b.BldRoot, Store.BldSandboxRoot)
 	shellDef := b.loadShellDef(shell)
-	env := inheritedEnv(cfg.Unsafe)
+	env := inheritedEnv(cfg)
 	b.setBufaEnv(env, osSandboxRoot, srcDir, shellDef.Move)
 	if !cfg.Unsafe {
 		env.Set("PATH", cleanSystemPath())
@@ -315,12 +316,12 @@ func (b *Builder) runBuildScript(srcDir, bldDir string, cfg BuildConfig.BufaConf
 	b.runScriptStep(srcDir, osBldDir, env, cfg, shellDef)
 }
 
-func inheritedEnv(unsafe bool) *Env {
+func inheritedEnv(cfg BuildConfig.BufaConfig) *Env {
 	environ := os.Environ()
-	if unsafe {
+	if cfg.Unsafe {
 		return newEnv(environ)
 	}
-	return newFilteredEnv(environ, safeInheritedEnv)
+	return newFilteredEnv(environ, safeInheritedEnvFor(cfg.Task.Args))
 }
 
 // Executables and batch files only — no script hosts (stock .VBS…WSH), no installer additions (.PS1, .PY, …).

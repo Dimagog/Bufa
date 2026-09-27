@@ -55,10 +55,10 @@ func TestBuild_ResultLines(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "exit status 3") {
 		t.Errorf("a failing task fails the run, got: %v", err)
 	}
-	if s := out.String(); strings.Contains(s, "result") || strings.Contains(s, "succeeded") || !strings.Contains(s, "Build FAILED (exit code 3): F") {
+	if s := out.String(); strings.Contains(s, "result") || strings.Contains(s, "succeeded") || !strings.Contains(s, "Task FAILED (exit code 3): F") {
 		t.Errorf("a failed task prints the frame footer and no result line:\n%s", s)
 	}
-	if runtime.GOOS == "windows" && !strings.Contains(out.String(), "----- Build Start: F -----") {
+	if runtime.GOOS == "windows" && !strings.Contains(out.String(), "----- Task Start: F -----") {
 		t.Errorf("the buffered output is dumped on failure:\n%s", out.String())
 	}
 }
