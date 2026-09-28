@@ -1,3 +1,4 @@
+use os
 use path
 use platform
 use str
@@ -18,6 +19,12 @@ for cfg [hello/*.BUFA] {
   if (and (not-eq $unit all) (or $platform:is-windows (not-eq $unit powershell))) {
     build /hello/$unit $@args
   }
+}
+
+# deploy/* are tasks: the token after the dir is their `out` argument
+var drop = (os:temp-dir bufa-deploy-*)
+for cfg [deploy/*.BUFA] {
+  build /deploy/(str:trim-suffix (path:base $cfg) .BUFA) $drop $@args
 }
 
 # rust links with the machine's own linker, which CI (it sets the variable) has and a user may not

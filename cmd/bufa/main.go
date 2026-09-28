@@ -29,7 +29,7 @@ import (
 	"github.com/dustin/go-humanize"
 	vfs "github.com/spf13/afero"
 
-	"github.com/dimagog/bufa"
+	Bufa "github.com/dimagog/bufa"
 	"github.com/dimagog/bufa/ArtifactCache"
 	"github.com/dimagog/bufa/Build"
 	"github.com/dimagog/bufa/Cache"
@@ -405,17 +405,7 @@ func buildMain(out io.Writer, in io.Reader, dirs []string, f buildFlags, dirty b
 	if len(dirs) == 0 {
 		dirs = []string{""} // cwd
 	}
-	for _, dir := range dirs {
-		c.Require(filepath.VolumeName(dir) == "", "'%s' is an absolute OS path; pass it as --start-dir", dir)
-	}
-	c.Require(len(dirs) == 1 || f.buildMode() == Runtime.ModeBuild,
-		"--shell/--post-shell take exactly one target dir, got %d", len(dirs))
 	rc := Runtime.PrepareConfig(f.NoDaemon, f.RestartDaemon, dirty /*writableSrc*/, out)
-	srcDirs := make([]string, len(dirs))
-	for i, dir := range dirs {
-		srcDirs[i] = resolveVirtualDirAgainstOSPaths(rc.SrcRoot, dir)
-	}
-	rc.TargetDirs = srcDirs // the dirs named on the command line (for --build-output, --force, and the shell flags)
 	rc.ShowOutput = f.showOutput()
 	rc.ForceRebuild = f.forceRebuild()
 	rc.BuildMode = f.buildMode()
@@ -429,9 +419,16 @@ func buildMain(out io.Writer, in io.Reader, dirs []string, f buildFlags, dirty b
 		if rc.DaemonDisabled {
 			DaemonClient.Stop(rc.BldRoot, false, out)
 		}
-		b = Build.NewDirtyBuilder(rc)
+		b = Build.NewDirtyBuilder(&rc)
 	} else {
-		b = Build.NewBuilder(rc)
+		b = Build.NewBuilder(&rc)
+	}
+	srcDirs, args, task := splitTargets(b, rc.SrcRoot, dirs)
+	c.Require(len(srcDirs) == 1 || rc.BuildMode == Runtime.ModeBuild,
+		"--shell/--post-shell take exactly one target dir, got %d", len(srcDirs))
+	rc.TargetDirs = srcDirs // the builder shares rc, so this reaches it (for --build-output, --force, and the shell flags)
+	if task {
+		b.BindArgs(srcDirs[0], args)
 	}
 	for _, srcDir := range srcDirs {
 		// Empty after a shell session (nothing to report) or a task (nothing published to point at).
@@ -447,6 +444,23 @@ func buildMain(out io.Writer, in io.Reader, dirs []string, f buildFlags, dirty b
 			fmt.Fprintln(out, "Task succeeded")
 		}
 	}
+}
+
+// Each token is a target dir until the first task, whose remaining tokens are its arguments: unresolved,
+// unchecked, and never a dir. A task anywhere but first is an error before anything builds.
+func splitTargets(b Build.IBuild, srcAbsRoot string, dirs []string) (targets, args []string, task bool) {
+	for i := 0; i < len(dirs) && !task; i++ {
+		dir := dirs[i]
+		c.Require(filepath.VolumeName(dir) == "", "'%s' is an absolute OS path; pass it as --start-dir", dir)
+		srcDir := resolveVirtualDirAgainstOSPaths(srcAbsRoot, dir)
+		targets = append(targets, srcDir)
+		task = b.IsTask(srcDir)
+		if task {
+			c.Require(i == 0, "task '%s' must be the only target", dir)
+			args = dirs[1:]
+		}
+	}
+	return targets, args, task
 }
 
 // dir resolves against cwd unless "/"-prefixed, which resolves against the source root.

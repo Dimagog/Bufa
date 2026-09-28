@@ -1,0 +1,10 @@
+# A deploy step is a task: it runs on every invocation and publishes nothing. `out` is the first command-line
+# token (`bufa deploy/nu C:\Drop`), the tokens after it land space-joined in `rest`, absent when there are none.
+task = ["out", "*rest"]
+deps.bld = ["/hello/default"]
+
+cmd = '''
+mkdir $env.out
+cp ../../hello/default/hello.txt $env.out
+print $"deployed hello.txt to ($env.out) ($env.rest? | default '')"
+'''

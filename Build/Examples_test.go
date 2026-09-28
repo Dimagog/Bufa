@@ -1,6 +1,7 @@
 package Build
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"os/exec"
@@ -44,7 +45,8 @@ func openExamples(t *testing.T) examplesProject {
 	examples := c.Check2(filepath.Abs(filepath.Join("..", "Examples")))
 	srcFS := vfs.NewBasePathFs(vfs.NewOsFs(), examples)
 	bld := t.TempDir()
-	b := NewBuilder(Runtime.NewTest(srcFS, vfs.NewBasePathFs(vfs.NewOsFs(), bld), examples, bld, io.Discard, true))
+	rc := Runtime.NewTest(srcFS, vfs.NewBasePathFs(vfs.NewOsFs(), bld), examples, bld, io.Discard, true)
+	b := NewBuilder(&rc)
 	skipIfNoSymlinks(t, b.store)
 	return examplesProject{b: b, src: examples, bld: bld, cache: ArtifactCache.New(ArtifactCache.GetCacheDir())}
 }
@@ -157,6 +159,43 @@ func TestExamples_Toolchains(t *testing.T) {
 			hello := p.output(p.b.Build(unit), "hello.txt")
 			if !strings.HasPrefix(hello, "hello from "+unit+" ") {
 				t.Errorf("hello.txt = %q, want 'hello from %s <version>'", hello, unit)
+			}
+		})
+	}
+}
+
+// Each deploy/* task copies hello/default's hello.txt into the dir its first argument names; the rest is echoed.
+func TestExamples_DeployUnits(t *testing.T) {
+	p := openExamples(t)
+	configs := c.Check2(filepath.Glob(filepath.Join(p.src, "deploy", "*"+Store.VirtualConfigSuffix)))
+	if len(configs) == 0 {
+		t.Fatal("no deploy/*.BUFA units found")
+	}
+	var out bytes.Buffer
+	p.b.Out = &out
+	p.b.ShowOutput = Runtime.ScopeAll
+
+	for _, cfgPath := range configs {
+		unit := strings.TrimSuffix(filepath.Base(cfgPath), Store.VirtualConfigSuffix)
+		dir := filepath.Join("deploy", unit)
+		t.Run(unit, func(t *testing.T) {
+			failIfSkipped(t)
+			reason := p.shellProviderUnavailable(p.shellProviderOf(dir), dir)
+			if reason == "" {
+				reason = p.shellProviderUnavailable(p.shellProviderOf(filepath.Join("hello", "default")), "hello/default")
+			}
+			if reason != "" {
+				t.Skip(reason)
+			}
+			drop := filepath.Join(t.TempDir(), "drop")
+			out.Reset()
+			p.b.BindArgs(dir, []string{drop, "v2", "final"})
+			if key := p.b.Build(dir); key != "" {
+				t.Errorf("a task publishes nothing, got %q", key)
+			}
+			hello := strings.TrimSpace(string(c.Check2(os.ReadFile(filepath.Join(drop, "hello.txt")))))
+			if hello != "hello from nu" || !strings.Contains(out.String(), "deployed hello.txt to "+drop+" v2 final") {
+				t.Errorf("hello.txt = %q, output:\n%s", hello, out.String())
 			}
 		})
 	}

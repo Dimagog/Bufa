@@ -93,7 +93,7 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   dirs `newFilteredEnv(…, safeInheritedEnvFor(cfg.Task.Args))` keeps only Windows `OS`/`SystemDrive`/`SystemRoot`/
   `windir` (`Doc/Specs/WindowsMinEnvVars.html`'s must-keep list minus what bufa sets itself), Unix **nothing** —
   plus a task's declared argument names (**Tasks**), folded like every other name and cloned onto the allowlist
-  per call (a set absent from the caller's env is simply absent, never an error). Then
+  per call (the fallback for a name no token bound; `BindArgs` has already required one or the other). Then
   `setBufaEnv` (one list shared with dirty): `BUFA_BUILD_ROOT`=`<bldRoot>/bld` + `BUFA_BUILD_DIR`=root-relative src
   dir (`%BUFA_BUILD_ROOT%\%BUFA_BUILD_DIR%` == cwd in both modes; relative so a script can bake it into a generated
   file and get byte-identical output on every machine), `BUFA_CACHE_ROOT`=`<bldRoot>/user` (pure path arithmetic),
@@ -232,10 +232,21 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   `Dirty-Building dir:` — and so do the frame (`Task Start` / `Task End` / `Task FAILED (exit code N)`) and the
   error breadcrumb (`... Task 'depl'` / `... Dirty task 'depl'`): `build()` defers a `c.ContextLazy` that reads
   the config assigned after it, so a failure before the config is read still says `Build`.
-  **Arguments** are the list form's names: the caller's env vars of those names ride the safe allowlist into the
-  task's script env (`safeInheritedEnvFor`, the **Env** paragraph above) — the target dir's only, never a dep's
-  (each dir filters its own inheritance) and never a cache-key term (a task is never cached); dirty and `unsafe`
-  inherit everything anyway, so the list changes nothing there. No CLI involvement: `set out=… && bufa depl`.
+  **Arguments** (`TaskArgs.go`) are the list form's names, bound to command-line tokens: cmd/bufa classifies its
+  tokens with `IsTask` (the cached, daemon-first config read — the same read the dir's `build()` does next) and
+  hands the task's tokens to `BindArgs(srcDir, tokens)`, which validates them against the decoded declaration
+  (`Task.Fixed()` each take one token; `Task.TailName()` the rest, **space-joined**, absent with none; an empty or
+  multi-line token, an unexpected token past the names with no tail, and a fixed name with neither a token nor a
+  caller variable of that name are hard errors — all before anything builds) and keeps the name→value pairs on the
+  **builder**
+  (`argsDir`, `args`), never on the shared `BufaConfig` the daemon and `localConfigCache` hand out. `setArgs` sets
+  them **last** in both script runners, after `setAllEnvVars` (plain `Set`, no `${}` expansion: a token is literal),
+  for the bound dir alone — so a token overrides a root/dep/dir `[env]` namesake and the inherited value, and a dir
+  `[env]` entry cannot reference an argument. A name no token bound rides the safe allowlist instead
+  (`safeInheritedEnvFor`, the **Env** paragraph above) — the caller's variable, which `BindArgs` required to exist
+  for a fixed name. The target dir's only, never a dep's (each dir filters its own inheritance; `setArgs` is a no-op
+  elsewhere) and never a cache-key term (a task is never cached); dirty and `unsafe` inherit everything anyway, and
+  the token still wins there. The session env is the script env, so `--shell`/`--post-shell` see the arguments.
   Both modes gate their cache bypass on the one predicate `mustRebuild` = `cfg.Task.Enabled ||
   ForceRebuildFor`, so a task is forced exactly as `--force` forces (`-f` is a no-op on a task, `-F` still forces its
   deps). **Clean**: the two result getters are `alwaysMiss`, and `realBuild` returns `""` after the script instead
@@ -352,10 +363,14 @@ Each binds this package to another; changing either side breaks the other with n
 - [Runtime](../Runtime/CLAUDE.md) — `$BUFA_BUILD_ROOT` is set into every script's env here **and** read by Runtime's
   `defaultBldRoot`, so it round-trips into any nested `bufa` a script invokes. `DirtyBuilder` writes the source tree
   through plain `SrcFS` ops, which works only because cmd/bufa passes `writableSrc=true` for dirty builds.
-  `newBuilderBase` folds `rc.RootConfig` into `rootConfigHash` **at construction**, so `RootConfig` must already be
-  resolved on the Config handed to `NewBuilder`/`NewDirtyBuilder` (a zero one keys every dir as if the marker had no
-  `[env]`). A shell session reaches the cold path only because Runtime's `ForceRebuildFor` folds `ShellSessionFor` —
-  the cache-bypass sites here never re-check `BuildMode`.
+  `BuilderBase` embeds `*Runtime.Config` — the CLI's value and the builder's are **one**, so a field assigned after
+  `NewBuilder`/`NewDirtyBuilder` reaches the builder (cmd/bufa assigns `TargetDirs` after classifying its tokens
+  through the builder's `IsTask`). Only what construction reads is snapshotted: `newBuilderBase` folds
+  `rc.RootConfig` into `rootConfigHash` and opens the store over `rc.BldFS` **at construction**, so those two must
+  already be resolved on the Config handed in (a zero `RootConfig` keys every dir as if the marker had no `[env]`);
+  every per-dir policy (`TargetDirs`, `ShowOutput`, `ForceRebuild`, `BuildMode`, `In`) is read per call and may be
+  assigned any time before the first `Build`. A shell session reaches the cold path only because Runtime's
+  `ForceRebuildFor` folds `ShellSessionFor` — the cache-bypass sites here never re-check `BuildMode`.
 - [BuildConfig](../BuildConfig/CLAUDE.md) — root `[env]` values are exported and hashed as written, with no re-trim
   or emptiness guard here, on the strength of `RootConfig.Validate` having trimmed and checked every literal
   (pointer receiver). `setAllEnvVars` iterates both `EnvTable`s as-is — document order only because the decode
@@ -368,7 +383,9 @@ Each binds this package to another; changing either side breaks the other with n
   `safeInheritedEnvFor` adds `Task.Args` to the allowlist **unchecked**, trusting `checkTaskArgs` to have rejected
   a name this package's clean env overwrites after inheritance (`bufaSetEnvVars` mirrors `cleanSystemPath` +
   `setPlatformEnv`'s names — adding a bufa-set var here means adding it there) or one the dir's `[env]` would
-  override.
+  override; `setArgs` binding a token to such a name **last** would clobber those the same way, so the check guards
+  both paths. `BindArgs` trusts the decode shape — `Task.Tail` ⇒ the last of `Args` is the sigil-stripped tail,
+  `Fixed()`/`TailName()` split it — and never re-validates a name.
 - [FilterFiles](../FilterFiles/CLAUDE.md) — `srcFiltersOverride`'s unanchored `-*.BUFA` depends on
   `normalizePattern`'s implicit `**/` prefix and on `*` matching an **empty** run; `bldFilterForOrNil` returns nil
   rather than `Compile(nil)` because a zero-rule filter excludes everything.
@@ -385,7 +402,11 @@ Each binds this package to another; changing either side breaks the other with n
   gets a shell that opens and exits at once, with no error. `Build` returns `""` for exactly two reasons — a shell
   session or a `task = true` dir — and `buildMain` tells them apart by its own `BuildMode` alone, printing
   `Task succeeded` for a `""` under `ModeBuild`; a third `""` reason here, or a task that returned a hash,
-  silently mislabels the result line.
+  silently mislabels the result line. `IsTask` and `BindArgs` exist for cmd/bufa's token split alone: `IsTask` must
+  stay the cached config read (it is called before `TargetDirs` is assigned, and its miss primes the cache the
+  build reuses), and `BindArgs` must raise every argument error itself — `buildMain` calls it before the first
+  `Build` on the strength of "nothing builds on a bad argument"; a check deferred to `setArgs` would fire after the
+  deps built.
 - [DaemonClient](../DaemonClient/CLAUDE.md) — the build root has two creators, both tagging it: `Connect`'s spawn
   hook (daemon mode) and `Store.MakeBuildSubdir` (daemon-less). Neither checks the tag afterwards, so a
   `BldFS.MkdirAll`/`WriteFile` under the root that bypasses `MakeBuildSubdir` mints an untagged root in daemon-less

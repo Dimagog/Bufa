@@ -17,7 +17,8 @@ import (
 
 func (f *fixture) dirtyBuilder() *DirtyBuilder {
 	bldFS := vfs.NewBasePathFs(vfs.NewOsFs(), f.bld)
-	return NewDirtyBuilder(Runtime.NewTest(f.srcFS, bldFS, f.src, f.bld, io.Discard, true))
+	rc := Runtime.NewTest(f.srcFS, bldFS, f.src, f.bld, io.Discard, true)
+	return NewDirtyBuilder(&rc)
 }
 
 func (f *fixture) srcExists(rel string) bool {
@@ -494,7 +495,7 @@ func TestDirtyBuild_ShellInstead(t *testing.T) {
 
 	wantVerb := byOS("copy", "cp")
 	b := f.dirtyBuilder()
-	out := shellSession(&b.Config, Runtime.ModeShell, "U",
+	out := shellSession(b.Config, Runtime.ModeShell, "U",
 		byOS("@echo SHELL_ROOT=%BUFA_BUILD_ROOT%\r\n@echo SHELL_VERB=%BUFA_COPY_OR_MOVE%\r\n@type own.txt\r\nexit\r\n",
 			"echo SHELL_ROOT=$BUFA_BUILD_ROOT\necho SHELL_VERB=$BUFA_COPY_OR_MOVE\ncat own.txt\nexit\n"))
 	if h := b.Build("U"); h != "" {
@@ -531,7 +532,7 @@ func TestDirtyBuild_ShellAfterRunsScriptRecordsNothing(t *testing.T) {
 	f.dirtyBuilder().Build("U")
 
 	b := f.dirtyBuilder()
-	out := shellSession(&b.Config, Runtime.ModePostShell, "U",
+	out := shellSession(b.Config, Runtime.ModePostShell, "U",
 		byOS("@type out.txt\r\n@echo tweak>shell.txt\r\nexit\r\n", "cat out.txt\necho tweak > shell.txt\nexit\n"))
 	if h := b.Build("U"); h != "" {
 		t.Errorf("a session builds nothing, got %q", h)

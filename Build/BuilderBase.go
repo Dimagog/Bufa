@@ -31,11 +31,16 @@ import (
 // The build entry point both Builder and DirtyBuilder expose.
 type IBuild interface {
 	Build(srcDir string) string
+	IsTask(srcDir string) bool
+	BindArgs(srcDir string, tokens []string)
 }
 
 type BuilderBase struct {
-	Runtime.Config
+	*Runtime.Config
 	store *Store.Store
+	// the task target's command-line arguments: name → token, the tail space-joined (TaskArgs.go)
+	argsDir string
+	args    []envVar
 	// circular build dependency guard
 	buildingNow Util.Set[string]
 	// srcDir -> build result hash: published output (clean), post-build tree hash (dirty)
@@ -63,7 +68,7 @@ type BuilderBase struct {
 	loadDepEnv     func(string) depEnv
 }
 
-func newBuilderBase(rc Runtime.Config) BuilderBase {
+func newBuilderBase(rc *Runtime.Config) BuilderBase {
 	rootConfigHash := rc.RootConfig.GetHash()
 	slog.Info("Root config hash:", "kind", "root.config", "hash", rootConfigHash)
 	Store.AllowBufaDir = rc.RootConfig.AllowBufaDir

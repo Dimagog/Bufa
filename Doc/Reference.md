@@ -154,23 +154,36 @@ A task is never a cache hit in either build mode and under any flag: `--force` i
 for any dir, printing no result line. A task's own `deps.bld = ["/"]` is what guarantees a fresh dependency output
 on every run.
 
-**Arguments.** A task may take per-invocation values from the caller's environment. `task = ["out"]` is a task
-whose script sees the caller's `out` env variable — the one deliberate hole in the
-[hermetic environment](#set-for-build-scripts), which otherwise inherits next to nothing:
+**Arguments.** A task may take per-invocation values from the command line. `task = ["out"]` is a task whose script sees
+the `out` the command line names, or the caller's `out` env variable when there is no argument — the one deliberate hole
+in the [hermetic environment](#set-for-build-scripts), which otherwise inherits next to nothing:
 
 ```toml
 # deploy.BUFA
-task = ["out"]
+task = ["out", "*rest"]
 deps.bld = ["/"]
 
 cmd = '$BUFA_COPY_OR_MOVE ../bufa "$out"'
 ```
 
-`out=~/bin bufa deploy` (`set out=C:\Bin && bufa deploy` under cmd) runs the script with `out` set as typed: no
-trimming, no expansion, no path resolution. A declared variable the caller did not set is simply absent — the script
-tests for it like any other. The names reach the task's own script and shell session only: the dirs the task depends on keep their hermetic environment, and no name or value ever enters a cache key (a task is never cached).
-`task = []` is the same as `task = true`. Under `unsafe = true` and in dirty mode the script inherits the whole
-environment anyway, so the list changes nothing there.
+`bufa deploy ~/bin` runs the script with `out` set to `~/bin` exactly as typed: no trimming, no expansion, no path
+resolution (and the script's cwd is its sandbox, so pass an absolute path). The tokens after a task's dir are its
+arguments, bound to the names in order; the **last** name may start with `*`: `*rest` takes every remaining token,
+space-joined, and is absent when there is none — the script tests for it like any other variable. `task = []` is the
+same as `task = true`.
+
+* A task is the **only dir** on its command line: `bufa somedir deploy` is an error even though `somedir` is a plain
+  build dir, and everything after `deploy` is an argument — never a dir to build, never a command name (`bufa deploy gc` deploys to `gc`).
+* A name without an arg takes the caller's variable of that name instead (`out=~/bin bufa deploy`;
+  `set out=C:\Bin && bufa deploy` under cmd) — unset there too, it is an error. An arg always wins over the
+  variable. `*rest` without args is the caller's `rest`, if set.
+* An unexpected arg is an error (a task with no `*` name takes exactly as many args as it has names), as is an
+  empty arg and a multi-line one. All of these fail before anything builds.
+* An argument that starts with `-` is a bufa flag. To hand one to the task, put the whole dir list after `--`:
+  `bufa -o -- deploy ~/bin --fast`. Otherwise flags go before the dirs or after the last argument, as usual.
+* The arguments reach the task's own script and shell session (`--shell`/`--post-shell`) only: the dirs the task
+  depends on keep their hermetic environment, and no name or value ever enters a cache key (a task is never cached).
+  Under `unsafe = true` and in dirty mode the script inherits the whole environment anyway; an arg still wins.
 
 The following are all config errors:
 
@@ -182,6 +195,7 @@ The following are all config errors:
 * An argument name follows the [`[env]` name rules](#env): non-empty, unique ignoring case, never the `BUFA_` prefix. It
   also must not be one Bufa sets itself (`PATH`, `TEMP`, `TMP`, `PATHEXT`, `ComSpec`, `HOME`, `TMPDIR`) or one the dir's
   own `[env]` defines — either would silently override the caller's value.
+* The `*` sigil on any name but the last, or on more than one (`task = ["*a", "b"]`).
 
 A raw-script `BUFA` is never a task. Like every other scalar, `task` [replaces per
 platform](#platform-sections-windows--unix--linux--macos) as a whole (names never concatenate): `[windows] task = false`
@@ -518,7 +532,7 @@ disposable copies but dirty-mode deps are the real source tree. **EXCEPT** the d
 A clean, safe build (the default) starts from a scrubbed environment:
 
 * **Inherited:** on Windows only `OS`, `SystemDrive`, `SystemRoot`, and `windir`; on Unix nothing at all — plus, for
-  a task, the variables its [`task` list](#task) names.
+  a task, its [arguments](#task): the command-line tokens, or the caller's variables of those names.
 * **`PATH`:** on Windows `%SystemRoot%\System32`, `%SystemRoot%`, `%SystemRoot%\System32\Wbem`, and
   `%SystemRoot%\System32\WindowsPowerShell\v1.0`; on Unix `/usr/bin:/bin:/usr/sbin:/sbin`.
 * **`TEMP` and `TMP`** (Windows) or **`TMPDIR`** (Unix): the store's `tmp/` dir, recreated empty before every script,

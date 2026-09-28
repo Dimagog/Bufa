@@ -137,7 +137,7 @@ func TestTask_ShellSession(t *testing.T) {
 	skipIfNoSymlinks(t, f.builder().store)
 
 	b := f.builder()
-	out := shellSession(&b.Config, Runtime.ModeShell, "T", byOS("exit\r\n", "exit\n"))
+	out := shellSession(b.Config, Runtime.ModeShell, "T", byOS("exit\r\n", "exit\n"))
 	if h := b.Build("T"); h != "" || f.countRuns(t) != 0 {
 		t.Errorf("a session on a task runs no script: hash %q, runs %d", h, f.countRuns(t))
 	}
@@ -185,7 +185,7 @@ func TestTask_ArgsLetCallerEnvThroughSafeEnv(t *testing.T) {
 
 	// The session env is the script env.
 	b2 := f.builder()
-	out := shellSession(&b2.Config, Runtime.ModeShell, "T",
+	out := shellSession(b2.Config, Runtime.ModeShell, "T",
 		byOS("@echo SESSION_SEES=%TASK_ARG_VALUE%\r\nexit\r\n", "echo SESSION_SEES=$TASK_ARG_VALUE\nexit\n"))
 	b2.Build("T")
 	if !strings.Contains(out.String(), "SESSION_SEES=probe-val") {
@@ -234,5 +234,124 @@ func TestDirtyTask_CannotBeBldDep(t *testing.T) {
 		"'T' is a task and cannot be a build dependency of 'A'")
 	if r := f.countRuns(t); r != 0 {
 		t.Errorf("nothing runs: %d runs", r)
+	}
+}
+
+// Arguments through cmd/test-shell, whose `env NAME` prints NAME=<value> or "NAME unset"; -O streams it.
+func (f *fixture) argTask(t *testing.T, dir, decl string) {
+	t.Helper()
+	f.write(t, filepath.Join(dir, "BUFA"), decl+"shell = '/P'\ncmd = '''env out\nenv rest\n'''\n")
+	f.write(t, filepath.Join(dir, "own.txt"), "own")
+}
+
+func (f *fixture) runArgTask(t *testing.T, b *Builder, dir string, tokens ...string) string {
+	t.Helper()
+	var out bytes.Buffer
+	b.Out = &out
+	b.ShowOutput = Runtime.ScopeAll
+	b.BindArgs(dir, tokens)
+	b.Build(dir)
+	return out.String()
+}
+
+func requireLines(t *testing.T, out string, want ...string) {
+	t.Helper()
+	for _, line := range want {
+		if !strings.Contains(out, line+"\n") {
+			t.Errorf("output lacks %q:\n%s", line, out)
+		}
+	}
+}
+
+func TestTask_ArgsBoundFromTokens(t *testing.T) {
+	f := newFixture(t)
+	f.fakeProvider(t, "P", testShellDef, "")
+	f.write(t, filepath.Join("D", "BUFA"), "shell = '/P'\ncmd = 'write out.txt [${out}]'\n")
+	f.write(t, filepath.Join("D", "own.txt"), "dep")
+	f.argTask(t, "T", "task = ['out', '*rest']\ndeps.bld = ['/D']\n")
+	f.argTask(t, "One", "task = ['out']\n")
+	skipIfNoSymlinks(t, f.builder().store)
+	t.Setenv("out", "from-env")
+	t.Setenv("rest", "rest-from-env")
+
+	requireLines(t, f.runArgTask(t, f.builder(), "T", `C:\Tools`, "-v", "--fast"), `out=C:\Tools`, "rest=-v --fast")
+	requireLines(t, f.runArgTask(t, f.builder(), "T", "x"), "out=x", "rest=rest-from-env")
+	os.Unsetenv("rest")
+	requireLines(t, f.runArgTask(t, f.builder(), "T", "x"), "out=x", "rest unset")
+	requireLines(t, f.runArgTask(t, f.builder(), "T"), "out=from-env", "rest unset")
+	if dep := strings.TrimSpace(f.readOut(t, f.builder().Build("D"), "out.txt")); dep != "[]" {
+		t.Errorf("a task's arguments never reach its deps, got %q", dep)
+	}
+
+	// The session env is the script env.
+	b := f.builder()
+	out := shellSession(b.Config, Runtime.ModeShell, "T", "env out\nexit\n")
+	b.BindArgs("T", []string{"tok"})
+	b.Build("T")
+	requireLines(t, out.String(), "(bufa shell) > out=tok")
+
+	// Every argument error is raised by BindArgs, before anything builds.
+	os.Unsetenv("out")
+	f2 := newFixture(t)
+	f2.fakeProvider(t, "P", testShellDef, "")
+	f2.argTask(t, "One", "task = ['out']\n")
+	f2.argTask(t, "Two", "task = ['out', '*rest']\n")
+	for _, tc := range []struct {
+		dir    string
+		tokens []string
+		want   string
+	}{
+		{"One", nil, "argument 'out' is missing: pass it on the command line or set the env variable"},
+		{"One", []string{"a", "b"}, "takes 1 argument(s), unexpected: 'b'"},
+		{"One", []string{""}, "argument 'out' must not be empty"},
+		{"One", []string{"a\r\nb"}, "argument 'out' must hold a single line"},
+		{"Two", []string{"a", "b", "c\nd"}, "argument 'rest' must hold a single line"},
+	} {
+		b := f2.builder()
+		requireErrorContains(t, c.Rescue(func() { b.BindArgs(tc.dir, tc.tokens) }), tc.want)
+	}
+	if d := f2.outDirs(t); d != 0 {
+		t.Errorf("nothing builds on an argument error, got %d out dirs", d)
+	}
+	requireLines(t, f2.runArgTask(t, f2.builder(), "Two", "a"), "out=a", "rest unset")
+}
+
+func TestDirtyTask_ArgsBoundFromTokens(t *testing.T) {
+	f := newFixture(t)
+	f.fakeProvider(t, "P", testShellDef, "")
+	f.argTask(t, "T", "task = ['out', '*rest']\n")
+	t.Setenv("out", "from-env")
+
+	b := f.dirtyBuilder()
+	var out bytes.Buffer
+	b.Out = &out
+	b.ShowOutput = Runtime.ScopeAll
+	b.BindArgs("T", []string{"tok", "r1", "r2"})
+	b.Build("T")
+	// dirty inherits the whole env, so the token must still win
+	requireLines(t, out.String(), "out=tok", "rest=r1 r2")
+	if f.exists("dirty/∕T") {
+		t.Error("a task records no skip hash")
+	}
+}
+
+// Every token reaches the script byte for byte through the native shells.
+func TestTask_ArgTransport(t *testing.T) {
+	report := filepath.Join(t.TempDir(), "report.txt")
+	f := newFixture(t)
+	f.write(t, filepath.Join("T", "BUFA"), "task = ['TASK_ARG_REPORT', 'TASK_ARG_V']\n"+bufaToml(
+		"@echo off\r\nchcp 65001>nul\r\nset TASK_ARG_V>\"%TASK_ARG_REPORT%\"\r\n",
+		"printf 'TASK_ARG_V=%s' \"$TASK_ARG_V\" > \"$TASK_ARG_REPORT\"\n"))
+	f.write(t, filepath.Join("T", "own.txt"), "own")
+	skipIfNoSymlinks(t, f.builder().store)
+
+	for _, v := range []string{"a b", `"quoted"`, `C:\Tools\`, "100%", "bang!", "x&y", "<h>", "$HOME", "héllo wörld ✓"} {
+		b := f.builder()
+		b.BindArgs("T", []string{report, v})
+		b.Build("T")
+		got := strings.TrimRight(string(c.Check2(os.ReadFile(report))), "\r\n")
+		if want := "TASK_ARG_V=" + v; got != want {
+			t.Errorf("the script saw %q, want %q", got, want)
+		}
 	}
 }

@@ -23,7 +23,7 @@ type versionFlag bool
 
 // build/dirty only. Left nil when omitted — buildMain reads nil as cwd.
 type dirArg struct {
-	Dirs []string `arg:"" optional:"" help:"Target directories (default: current directory)."`
+	Dirs []string `arg:"" optional:"" help:"Target directories (default: current directory), or a single task dir followed by its arguments: <task> [<arg>...]."`
 }
 
 // options shared by the build and dirty subcommands only

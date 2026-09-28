@@ -1,0 +1,10 @@
+# The same deploy task under PowerShell 7: arguments are plain environment variables in every shell.
+shell = "pwsh"
+task = ["out", "*rest"]
+deps.bld = ["/hello/default"]
+
+cmd = '''
+New-Item -ItemType Directory -Force $env:out | Out-Null
+Copy-Item ../../hello/default/hello.txt $env:out
+Write-Output "deployed hello.txt to $env:out $env:rest"
+'''

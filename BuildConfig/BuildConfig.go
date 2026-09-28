@@ -143,7 +143,22 @@ func (cmd *Cmd) UnmarshalTOML(data any) error {
 
 type Task struct {
 	Enabled bool     // task = true or a list
-	Args    []string // task = ["out"]: caller env vars let through to the script
+	Args    []string // task = ["out", "*rest"]: argument names in order, the tail's sigil stripped
+	Tail    bool     // the last of Args was "*name": it takes the remaining tokens, zero or more
+}
+
+func (t Task) Fixed() []string {
+	if t.Tail {
+		return t.Args[:len(t.Args)-1]
+	}
+	return t.Args
+}
+
+func (t Task) TailName() string {
+	if t.Tail {
+		return t.Args[len(t.Args)-1]
+	}
+	return ""
 }
 
 func (t *Task) UnmarshalTOML(data any) error {
@@ -158,6 +173,13 @@ func (t *Task) UnmarshalTOML(data any) error {
 			name, ok := v.(string)
 			if !ok {
 				return fmt.Errorf("task argument names must be strings, got %T", v)
+			}
+			if bare, tail := strings.CutPrefix(name, "*"); tail {
+				if i != len(d)-1 {
+					return fmt.Errorf("task argument '%s': only the last argument may take the rest with '*'", name)
+				}
+				t.Tail = true
+				name = bare
 			}
 			t.Args[i] = name
 		}

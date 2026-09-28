@@ -26,7 +26,7 @@ type DirtyBuilder struct {
 	setDirtyHash func(srcDir, hash string)
 }
 
-func NewDirtyBuilder(rc Runtime.Config) *DirtyBuilder {
+func NewDirtyBuilder(rc *Runtime.Config) *DirtyBuilder {
 	b := &DirtyBuilder{
 		BuilderBase:    newBuilderBase(rc),
 		localHashCache: Cache.Map[string, string]{},
@@ -215,5 +215,6 @@ func (b *DirtyBuilder) runDirtyBuildScript(srcDir string, cfg BuildConfig.BufaCo
 	b.setBufaEnv(env, b.SrcRoot, srcDir, shellDef.Copy)
 	b.setCacheDirEnv(env, srcDir, cfg)
 	b.setAllEnvVars(env, srcDir, cfg, b.depEnvsFor(bldDeps))
+	b.setArgs(env, srcDir)
 	b.runScriptStep(srcDir, filepath.Join(b.SrcRoot, srcDir), env, cfg, shellDef)
 }

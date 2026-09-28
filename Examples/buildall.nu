@@ -17,6 +17,11 @@ def --wrapped main [...args: string] {
       build $"/hello/($unit)" ...$args
     }
   }
+  # deploy/* are tasks: the token after the dir is their `out` argument
+  let drop = $nu.temp-path | path join bufa-deploy
+  for unit in (glob deploy/*.BUFA | path parse | get stem | sort) {
+    build $"/deploy/($unit)" $drop ...$args
+  }
   # rust links with the machine's own linker, which CI (it sets the variable) has and a user may not
   let in_ci = ($env.BUFA_TEST_EXAMPLES_REQUIRED? | default "") != ""
   let dirs = [java go clj] ++ (if $in_ci { [rust] } else { [] })

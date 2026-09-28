@@ -1,0 +1,11 @@
+# The same deploy task under Elvish; an absent `rest` is tested with has-env, as any other variable would be.
+shell = "elvish"
+task = ["out", "*rest"]
+deps.bld = ["/hello/default"]
+
+cmd = '''
+use os
+os:mkdir-all $E:out
+print (slurp < ../../hello/default/hello.txt) > $E:out/hello.txt
+echo deployed hello.txt to $E:out (if (has-env rest) { put $E:rest } else { put '' })
+'''

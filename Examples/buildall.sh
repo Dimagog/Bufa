@@ -18,6 +18,11 @@ for cfg in hello/*.BUFA; do
   fi
 done
 
+# deploy/* are tasks: the token after the dir is their `out` argument
+for cfg in deploy/*.BUFA; do
+  build "deploy/$(basename "$cfg" .BUFA)" "${TMPDIR:-/tmp}/bufa-deploy" "$@"
+done
+
 # rust links with the machine's own linker, which CI (it sets the variable) has and a user may not
 dirs="java go clj"
 if [ -n "${BUFA_TEST_EXAMPLES_REQUIRED:-}" ]; then

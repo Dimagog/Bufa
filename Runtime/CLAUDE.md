@@ -101,9 +101,11 @@ Each binds this package to another; changing either side breaks the other with n
 - [internal/UnsafeIO](../internal/UnsafeIO/CLAUDE.md) — `UnsafeIO.OSPath` falls back to cwd-relative `filepath.Abs`
   when the fs lacks `GetRealPath`, so clean mode's RO `SrcFS` re-exposing `RealPath` is load-bearing: losing it
   makes every source symlink read resolve against the wrong root **silently**.
-- [cmd/bufa](../cmd/bufa/CLAUDE.md) — `Config` is copied **by value** into the builder, so `TargetDirs`,
-  `ShowOutput`, `ForceRebuild`, `BuildMode`, and `In` must be assigned before `NewBuilder`/`NewDirtyBuilder`; moving
-  any later silently degrades those flags (a nil `In` hands the shell an EOF stdin). `BuildModeFor` returns the
+- [cmd/bufa](../cmd/bufa/CLAUDE.md) — the builder embeds `*Config`: cmd/bufa's `rc` and the builder's are one
+  value, so `TargetDirs`, `ShowOutput`, `ForceRebuild`, `BuildMode`, and `In` may be assigned after
+  `NewBuilder`/`NewDirtyBuilder` but must be before the first `Build` (`TargetDirs` **is** assigned after: the
+  token split needs the builder's config read); a field left unassigned silently degrades that flag (a nil `In`
+  hands the shell an EOF stdin). Only `RootConfig` and `BldFS` are read at construction. `BuildModeFor` returns the
   session mode for **every** `TargetDirs` member — cmd/bufa's exactly-one-dir guard on `--shell`/`--post-shell` is
   what keeps a session to one dir. `prepareBaseConfig` takes no dir on purpose: the `<dir>` grammar (cwd-relative,
   `/`-prefixed root-relative) lives in cmd/bufa alone; a dir parameter here re-splits it — on unix `/x` is also

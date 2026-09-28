@@ -56,6 +56,26 @@ source, nothing published. Building one builds every dep it lists, and a cached 
 * `all` takes `rust/` unconditionally, so it needs the platform's linker — unlike `buildall`, which leaves `rust/`
   out by default.
 
+## Tasks with Arguments
+
+`deploy/` holds one virtual **task** per shell (`task = ["out", "*rest"]`, see ['task'](../Doc/Reference.md#task)): a
+deploy step that runs on every invocation, publishes nothing, and takes its destination from the command line. The
+tokens after a task's dir are its arguments, handed to the script as plain environment variables:
+`bufa deploy/nu C:\Drop` builds `hello/default` (cached as usual) and copies its `hello.txt` into `C:\Drop`; anything
+after the path lands space-joined in `rest`, which is absent when there is nothing.
+
+| Shell        | Example         | Reads                    |
+| ------------ | --------------- | ------------------------ |
+| Nushell      | `deploy/nu`     | `$env.out`, `$env.rest?` |
+| PowerShell 7 | `deploy/pwsh`   | `$env:out`, `$env:rest`  |
+| Elvish       | `deploy/elvish` | `$E:out`, `has-env rest` |
+
+* A task is the only dir on its command line: every token after it is an argument, never another dir.
+* Pass an absolute `out`: the script's cwd is its sandbox, not yours, and a relative path would land there.
+* A token starting with `-` is a bufa flag. To hand one to the task, put the whole dir list after `--`:
+  `bufa -o -- deploy/nu C:\Drop --dry-run`.
+* `bufa deploy/nu` with no token takes `out` from your environment instead, and fails when it is unset there too.
+
 ## Running the Examples
 
 Run everything from `Examples/`. Build outputs land in the sibling `Examples.BUFA/` store (git-ignored).
@@ -72,6 +92,8 @@ bufa java              # downloads + unpacks the JDK once, then javac + java und
 bufa go                # same with the Go distribution: go build, then the binary
 bufa clj               # same with the Clojure CLI, on the same JDK; first run fetches Clojure from Maven
 bufa rust              # same with rustc + cargo: cargo build, then the binary; needs a linker installed
+bufa deploy/nu C:\Drop            # a task: builds hello/default, copies its hello.txt to C:\Drop; runs every time
+bufa deploy/pwsh C:\Drop v2 final # same under PowerShell 7, with "v2 final" in $env:rest
 ```
 
 ### Build Everything with One Aggregator

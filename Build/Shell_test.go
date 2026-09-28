@@ -196,7 +196,7 @@ func TestShell_FakeProvider_RunsScriptViaProviderExe(t *testing.T) {
 	f.write(t, filepath.Join("U", "own.txt"), "v1")
 	b := f.builder()
 	skipIfNoSymlinks(t, b.store)
-	out := shellSession(&b.Config, Runtime.ModeBuild, "U", "")
+	out := shellSession(b.Config, Runtime.ModeBuild, "U", "")
 	b.ShowOutput = Runtime.ScopeAll
 
 	key := b.Build("U")
@@ -217,7 +217,7 @@ func TestShell_FakeProvider_RunsScriptViaProviderExe(t *testing.T) {
 	// A definition with verbs exports the mode's spelling (clean ⇒ move).
 	f.fakeProvider(t, "tools/fake", testShellDefWithVerbs, "")
 	b = f.builder()
-	out = shellSession(&b.Config, Runtime.ModeBuild, "U", "")
+	out = shellSession(b.Config, Runtime.ModeBuild, "U", "")
 	b.ShowOutput = Runtime.ScopeAll
 	b.Build("U")
 	if !strings.Contains(out.String(), "BUFA_COPY_OR_MOVE=mv") {
@@ -245,7 +245,7 @@ func TestShell_FakeProvider_ScriptFailurePropagates(t *testing.T) {
 	f.write(t, filepath.Join("U", "own.txt"), "v1")
 	b := f.builder()
 	skipIfNoSymlinks(t, b.store)
-	out := shellSession(&b.Config, Runtime.ModeBuild, "U", "")
+	out := shellSession(b.Config, Runtime.ModeBuild, "U", "")
 	requireErrorContains(t, c.Rescue(func() { b.Build("U") }), "exit status 7")
 	if !strings.Contains(out.String(), "Build FAILED (exit code 7): U") {
 		t.Errorf("frame must report the shell's exit code:\n%s", out.String())
@@ -263,7 +263,7 @@ func TestShell_FakeProvider_Sessions(t *testing.T) {
 	skipIfNoSymlinks(t, f.builder().store)
 
 	b := f.builder()
-	out := shellSession(&b.Config, Runtime.ModeShell, "U", "echo IN_SESSION\nexit\n")
+	out := shellSession(b.Config, Runtime.ModeShell, "U", "echo IN_SESSION\nexit\n")
 	if h := b.Build("U"); h != "" || f.countRuns(t) != 0 {
 		t.Errorf("--shell builds nothing and replaces the script: hash %q, runs %d", h, f.countRuns(t))
 	}
@@ -274,7 +274,7 @@ func TestShell_FakeProvider_Sessions(t *testing.T) {
 	}
 
 	b = f.builder()
-	out = shellSession(&b.Config, Runtime.ModePostShell, "U", "echo AFTER\nexit\n")
+	out = shellSession(b.Config, Runtime.ModePostShell, "U", "echo AFTER\nexit\n")
 	b.Build("U")
 	if r := f.countRuns(t); r != 1 {
 		t.Errorf("--post-shell runs the script: %d runs, want 1", r)
@@ -295,10 +295,10 @@ func TestShell_FakeProvider_SessionModeAbsentFails(t *testing.T) {
 	f.builder().Build("U")
 
 	b := f.builder()
-	shellSession(&b.Config, Runtime.ModeShell, "U", "exit\n")
+	shellSession(b.Config, Runtime.ModeShell, "U", "exit\n")
 	requireErrorContains(t, c.Rescue(func() { b.Build("U") }), "defines no 'shell' session mode")
 	b = f.builder()
-	shellSession(&b.Config, Runtime.ModePostShell, "U", "exit\n")
+	shellSession(b.Config, Runtime.ModePostShell, "U", "exit\n")
 	requireErrorContains(t, c.Rescue(func() { b.Build("U") }), "defines no 'postShell' session mode")
 }
 
@@ -427,7 +427,7 @@ func TestShell_ScriptlessDirResolvesNoShell(t *testing.T) {
 	}
 	// A session on it does need the shell.
 	b = f.builder()
-	shellSession(&b.Config, Runtime.ModeShell, "P", "exit\n")
+	shellSession(b.Config, Runtime.ModeShell, "P", "exit\n")
 	requireErrorContains(t, c.Rescue(func() { b.Build("P") }), "unknown shell 'nope'")
 }
 

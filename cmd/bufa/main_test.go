@@ -42,7 +42,8 @@ func TestBuild_AbsoluteTargetRejected(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("only a volume-carrying path is detectably absolute; unix /x is root-relative by design")
 	}
-	err := run([]string{t.TempDir()}, strings.NewReader(""), io.Discard, io.Discard)
+	newProject(t)
+	err := run([]string{t.TempDir(), "-d"}, strings.NewReader(""), io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "--start-dir") {
 		t.Errorf("an absolute <dir> must fail naming --start-dir, got: %v", err)
 	}
@@ -85,11 +86,13 @@ func TestCheck_GlobalOnly(t *testing.T) {
 	}
 }
 
-// No marker under cwd: a guard that slipped past root resolution fails with a different message.
+// The guard counts targets, so both must first resolve as build dirs.
 func TestBuild_ShellNeedsOneDir(t *testing.T) {
-	t.Chdir(t.TempDir())
+	root := newProject(t)
+	writeConfig(t, root, "a", "@rem noop", ":")
+	writeConfig(t, root, "b", "@rem noop", ":")
 	for _, flag := range []string{"--shell", "--post-shell"} {
-		err := run([]string{"a", "b", flag}, strings.NewReader(""), io.Discard, io.Discard)
+		err := run([]string{"a", "b", flag, "-d"}, strings.NewReader(""), io.Discard, io.Discard)
 		if err == nil || !strings.Contains(err.Error(), "exactly one target dir") {
 			t.Errorf("bufa a b %s must fail naming the one-target rule, got: %v", flag, err)
 		}

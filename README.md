@@ -346,8 +346,9 @@ what `bufa <dir>` builds, what `deps.src` and `deps.bld` point to, and what gets
 
 A build dir that is *only* action, e.g. a deploy step, opts out of the last two with ['task =
 true'](Doc/Reference.md#task): its script runs on every invocation and publishes nothing, so it is never a cache hit.
-`task = ["out"]` also lets the caller's `out` variable through to the script — a deliberate hole in the hermetic
-environment, and only for a task.
+`task = ["out"]` also gives it an argument: `bufa deploy ~/bin` hands `out` to the script as an environment variable,
+and with no argument on the command line the caller's own `out` env variable passes through instead — a deliberate hole
+in the hermetic environment, and only for a task.
 
 A build dir's source is the directory and everything below it — with one exception: a subdirectory holding a `BUFA`
 of its own is a separate build dir, and the parent does not own it. It is left out of the parent's source hash and
@@ -421,7 +422,7 @@ That makes virtual dirs the natural home for anything that is all action and no 
 "build everything" aggregators, and artifact providers — a ['cmd = false'](Doc/Reference.md#cmd) config with an exported
 `[[deps.ext]]` is a complete, version-pinned provider in one small file. Virtual dirs pair well with
 ['task'](Doc/Reference.md#task), too: a `deploy.BUFA` with `task = ["out"]` is a deploy step that runs every time,
-copying to whatever `out` the caller set.
+copying to whatever `out` the command line names, or the caller's `out` env variable when there is no argument.
 
 Two rules follow from "no source": in a clean build the directory must not actually exist on disk (a dirty build
 creates it for real, since its outputs have to land somewhere), and ['[env]'](Doc/Reference.md#env) values must be

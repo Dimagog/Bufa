@@ -157,7 +157,8 @@ func (f *fixture) unit(t *testing.T, rel, ownContent string) {
 
 func (f *fixture) builder() *Builder {
 	bldFS := vfs.NewBasePathFs(vfs.NewOsFs(), f.bld)
-	return NewBuilder(Runtime.NewTest(f.srcFS, bldFS, f.src, f.bld, io.Discard, true))
+	rc := Runtime.NewTest(f.srcFS, bldFS, f.src, f.bld, io.Discard, true)
+	return NewBuilder(&rc)
 }
 
 func (f *fixture) countRuns(t *testing.T) int {
@@ -2270,7 +2271,7 @@ func TestBuild_ShellInsteadStagesAndKeepsSandbox(t *testing.T) {
 	skipIfNoSymlinks(t, f.builder().store)
 
 	b := f.builder()
-	out := shellSession(&b.Config, Runtime.ModeShell, "Parent",
+	out := shellSession(b.Config, Runtime.ModeShell, "Parent",
 		byOS("@echo SHELL_DIR=%BUFA_BUILD_DIR%\r\n@type own.txt\r\n@type ..\\Dep\\out.txt\r\n@echo x>shell.txt\r\nexit\r\n",
 			"echo SHELL_DIR=$BUFA_BUILD_DIR\ncat own.txt\ncat ../Dep/out.txt\necho x > shell.txt\nexit\n"))
 	if key := b.Build("Parent"); key != "" {
@@ -2313,7 +2314,7 @@ func TestBuild_ShellInsteadBypassesCachedResult(t *testing.T) {
 	f.builder().Build("U")
 
 	b := f.builder()
-	out := shellSession(&b.Config, Runtime.ModeShell, "U", byOS("exit\r\n", "exit\n"))
+	out := shellSession(b.Config, Runtime.ModeShell, "U", byOS("exit\r\n", "exit\n"))
 	b.Build("U")
 	if !strings.Contains(out.String(), "Shell Start: U") {
 		t.Errorf("a cached target must still open its shell, got:\n%s", out.String())
@@ -2333,7 +2334,7 @@ func TestBuild_ShellAfterRunsScriptAndKeepsSandbox(t *testing.T) {
 	f.builder().Build("U")
 
 	b := f.builder()
-	out := shellSession(&b.Config, Runtime.ModePostShell, "U",
+	out := shellSession(b.Config, Runtime.ModePostShell, "U",
 		byOS("@type out.txt\r\n@echo STATE=%SHELL_STATE%\r\n@echo tweak>shell.txt\r\nexit\r\n",
 			"cat out.txt\necho STATE=$SHELL_STATE\necho tweak > shell.txt\nexit\n"))
 	if key := b.Build("U"); key != "" {
@@ -2363,7 +2364,7 @@ func TestBuild_ShellAfterScriptFailureKeepsTheShell(t *testing.T) {
 	skipIfNoSymlinks(t, f.builder().store)
 
 	b := f.builder()
-	out := shellSession(&b.Config, Runtime.ModePostShell, "U", byOS("@echo IN_SHELL\r\nexit\r\n", "echo IN_SHELL\nexit\n"))
+	out := shellSession(b.Config, Runtime.ModePostShell, "U", byOS("@echo IN_SHELL\r\nexit\r\n", "echo IN_SHELL\nexit\n"))
 	if err := c.Rescue(func() { b.Build("U") }); err != nil {
 		t.Fatalf("a session is not a build, so the script's exit status must not fail it: %v", err)
 	}

@@ -27,7 +27,7 @@ type Builder struct {
 	getSrcHash func(string) string
 }
 
-func NewBuilder(rc Runtime.Config) *Builder {
+func NewBuilder(rc *Runtime.Config) *Builder {
 	b := &Builder{
 		BuilderBase: newBuilderBase(rc),
 	}
@@ -312,6 +312,7 @@ func (b *Builder) runBuildScript(srcDir, bldDir string, cfg BuildConfig.BufaConf
 	setPlatformEnv(env, osTmpDir, cfg.Unsafe)
 	// Last on purpose: ${NAME} refs must see the complete env, and an [env] namesake overrides any bufa var.
 	b.setAllEnvVars(env, srcDir, cfg, b.depEnvsFor(bldDeps))
+	b.setArgs(env, srcDir)
 
 	b.runScriptStep(srcDir, osBldDir, env, cfg, shellDef)
 }

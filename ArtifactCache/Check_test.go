@@ -232,4 +232,3 @@ func TestCheck_OldStagingLeftovers(t *testing.T) {
 	}
 	assertGone(t, ac, staging...)
 }
-

@@ -143,8 +143,9 @@ Everything else goes. Explicitly:
   both `[env]` tables decode into (document order restored from `toml.MetaData.Keys()` inside the gateway, a platform
   override keeping its top-level position), the `cmd` string-or-`false` union (`cmd = false` ⇒ a deliberately
   scriptless stage+publish dir — the only script-optional opt-in), the `task` bool-or-list union (whole-value
-  presence fold; the list names caller env vars let through; `checkTask` after the fold rejects a task with
-  `cmd = false` or any publish-side key, and an argument name that is invalid, bufa-set, or in `[env]`),
+  presence fold; the list names the positional arguments, a last `"*rest"` the tail — sigil stripped into
+  `Tail`/`Fixed()`/`TailName()`; `checkTask` after the fold rejects a task with `cmd = false` or any publish-side
+  key, and an argument name that is invalid, bufa-set, or in `[env]`),
   `deps.ext`/`deps.export`/
   `deps.cacheDir`/`largeOutput`/`shell`/`[env]` semantics with `EnvVar`'s literal-vs-`{ file }` dispatch, the
   `[windows]`/`[unix]`/`[linux]`/`[macos]` fold tree (four top-level tables; `root ← [unix] ← [linux] | [macos]`
@@ -176,8 +177,10 @@ Everything else goes. Explicitly:
   marker's `GetHash()` — whole `[env]` table + `shell` default + bufa `x.y` version/`unsafe` TTL bucket),
   **tasks** (`task = true`: getters `alwaysMiss` in both modes, `""` returned after the script so nothing publishes
   or records — cmd/bufa prints the `Task succeeded` line, not Build — the task-in-`deps.bld`/shell-provider hard
-  error raised over the final dep list before any dep builds, and `task = ["out"]` arguments as caller env vars
-  added to the safe-inheritance allowlist of the task dir alone),
+  error raised over the final dep list before any dep builds, and `task = ["out", "*rest"]` arguments — `IsTask` +
+  `BindArgs` for cmd/bufa's token split, tokens validated before anything builds and bound last into the task
+  dir's script env alone, a name with no token falling back to the caller's env var via the safe-inheritance
+  allowlist; the builder embeds `*Runtime.Config`, so `TargetDirs` is assigned after construction),
   ancestors-first
   staging and `largeOutput` link
   staging with its

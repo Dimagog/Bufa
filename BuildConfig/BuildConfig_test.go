@@ -218,8 +218,15 @@ func TestTask_Decode(t *testing.T) {
 	if cfg := decode(t, "task = []\ncmd = 'x'\n"); !cfg.Task.Enabled || len(cfg.Task.Args) != 0 {
 		t.Errorf("task = [] must decode as an argument-less task: %+v", cfg.Task)
 	}
-	if cfg := decode(t, "task = ['out', 'Mode']\ncmd = 'x'\n"); !cfg.Task.Enabled || !slices.Equal(cfg.Task.Args, []string{"out", "Mode"}) {
+	if cfg := decode(t, "task = ['out', 'Mode']\ncmd = 'x'\n"); !cfg.Task.Enabled || !slices.Equal(cfg.Task.Args, []string{"out", "Mode"}) || cfg.Task.Tail {
 		t.Errorf("task = [names] must keep the names in order: %+v", cfg.Task)
+	}
+	if cfg := decode(t, "task = ['out', '*rest']\ncmd = 'x'\n"); !slices.Equal(cfg.Task.Args, []string{"out", "rest"}) || !cfg.Task.Tail ||
+		!slices.Equal(cfg.Task.Fixed(), []string{"out"}) || cfg.Task.TailName() != "rest" {
+		t.Errorf("a last '*name' is the tail, sigil stripped: %+v", cfg.Task)
+	}
+	if cfg := decode(t, "task = ['*rest']\ncmd = 'x'\n"); len(cfg.Task.Fixed()) != 0 || cfg.Task.TailName() != "rest" {
+		t.Errorf("a tail alone: %+v", cfg.Task)
 	}
 	for _, doc := range []string{"task = 'out'\ncmd = 'x'\n", "task = [1]\ncmd = 'x'\n", "task = 1\ncmd = 'x'\n"} {
 		var cfg BufaConfig
@@ -287,6 +294,11 @@ func TestTask_RejectsBadArgNames(t *testing.T) {
 		{name: "bufa-set HOME", doc: "task = ['HOME']\ncmd = 'x'\n", want: "bufa sets itself"},
 		{name: "in [env]", doc: "task = ['out']\ncmd = 'x'\n[env]\nOut = 'x'\n", want: "'Out' is both a task argument and an [env] variable"},
 		{name: "in platform [env]", doc: "task = ['out']\ncmd = 'x'\n" + bothSections(platTable(".env", "out = 'x'\n")), want: "both a task argument and an [env] variable"},
+		{name: "tail not last", doc: "task = ['*rest', 'out']\ncmd = 'x'\n", want: "only the last argument may take the rest with '*'"},
+		{name: "two tails", doc: "task = ['*a', '*b']\ncmd = 'x'\n", want: "only the last argument may take the rest with '*'"},
+		{name: "bare sigil", doc: "task = ['out', '*']\ncmd = 'x'\n", want: "task argument name must not be empty"},
+		{name: "tail duplicates a name", doc: "task = ['rest', '*Rest']\ncmd = 'x'\n", want: "duplicate task argument 'Rest'"},
+		{name: "tail in [env]", doc: "task = ['*rest']\ncmd = 'x'\n[env]\nrest = 'x'\n", want: "'rest' is both a task argument and an [env] variable"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var cfg BufaConfig

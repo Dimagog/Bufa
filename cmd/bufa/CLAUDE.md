@@ -15,11 +15,20 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../../CLAUDE.md).
   command-line order on one builder**, so a dep shared by two targets builds once; each prints its own
   `Build result:` line (a `task = true` dir returns `""` and prints `Task succeeded` instead — the only `""`
   under `ModeBuild`; a session's `""` prints nothing; a failure of either prints no result line, just the frame
-  footer and the `bufa ERROR:`), the first failure stops the rest, a duplicate target is a local-cache hit. Flags go
-  before
-  or after the dir list; `bufa a -f b` is a parse error (kong fills a slice positional from consecutive tokens
-  only). build is the **default command** (`default:"withargs"`); command names win over dir names **as the first
-  token only** (`bufa a gc` builds `a` and `gc`; escape via `bufa ./gc`).
+  footer and the `bufa ERROR:`), the first failure stops the rest, a duplicate target is a local-cache hit.
+  **Task arguments** (`splitTargets`, `Doc/Specs/ScriptArgs.md`): the builder is created first (over `&rc`, the
+  one Config both share) and the `<dir>` tokens are classified left to right through its `IsTask` — volume check,
+  resolve, config read — until the **first task**, whose remaining tokens are its arguments: not resolved, not
+  volume-checked, not matched against command names (`bufa depl gc` deploys to `gc`; `bufa depl C:\Tools` is
+  legal). A task at any later position is `task '<dir>' must be the only target`, raised **before anything
+  builds** (the whole list is classified before the first `Build`, so a missing config of a later target now fails
+  upfront too). Then the session one-target guard counts **targets**, not tokens (`bufa depl C:\Tools -s` is one),
+  `rc.TargetDirs` is assigned, and `BindArgs(targets[0], args)` validates and binds — every argument error precedes
+  the first `Build`. Flags go before or after the dir list; `bufa a -f b` is a parse error (kong fills a slice
+  positional from consecutive tokens only), and so is `bufa depl -- -x`: kong's `--` ends the slice too, so a
+  dash argument needs the **whole dir list** after `--` (`bufa -o -- depl -x`). build is the **default command**
+  (`default:"withargs"`); command names win over dir names **as the first token only** (`bufa a gc` builds `a` and
+  `gc`; escape via `bufa ./gc`).
 - **Flags are exact per subcommand** (kong rejects a flag the command's struct doesn't carry). build/dirty embed
   `buildFlags`: `--no-daemon` (`-d`), `--restart-daemon` (`-r`); `--build-output-all` (`-O`) / `--build-output`
   (`-o`); `--force` (`-f`) / `--force-all` (`-F`) → `Runtime.ScopeTarget`/`ScopeAll` (both pairs fold through one
@@ -107,11 +116,16 @@ Each binds this package to another; changing either side breaks the other with n
   post-failure `nuke` refuse and `check` report it, with no test here catching it. `Build` returns `""` for exactly
   two reasons — a shell session or a `task = true` dir — and `buildMain` tells them apart by `rc.BuildMode` alone
   (`ModeBuild` ⇒ `Task succeeded`, else nothing); a third `""` reason in Build silently mislabels the line.
-- [Runtime](../../Runtime/CLAUDE.md) — `Runtime.Config` is copied **by value** into the builder, so `rc.TargetDirs`
-  (in the srcRoot-relative key space `resolveVirtualDirAgainstOSPaths` produces), `rc.ShowOutput`, `rc.ForceRebuild`,
-  `rc.BuildMode`, and `rc.In` must be assigned before `NewBuilder`/`NewDirtyBuilder`; moving any later silently
-  degrades those flags. Runtime's `BuildModeFor` returns the session mode for **every** `TargetDirs` member —
-  `buildMain`'s exactly-one-dir guard is the only thing keeping a session to one dir. The `<dir>` grammar lives
+  `splitTargets` leans on `IsTask` being Build's cached config read (a later `build()` of the dir reads nothing
+  new) and on `BindArgs` raising every argument error itself, so calling it before the loop is what makes "nothing
+  builds on a bad argument" true; a `BindArgs` that deferred a check to env assembly would fail after the deps built.
+- [Runtime](../../Runtime/CLAUDE.md) — `Runtime.Config` is shared with the builder **by pointer** (`&rc`), so
+  `rc.TargetDirs` (in the srcRoot-relative key space `resolveVirtualDirAgainstOSPaths` produces) is legally
+  assigned **after** `NewBuilder`/`NewDirtyBuilder` — it cannot be known earlier, since classifying the tokens needs
+  the builder's config read — but before the first `Build`; `rc.ShowOutput`, `rc.ForceRebuild`, `rc.BuildMode`, and
+  `rc.In` likewise. Only `RootConfig` and `BldFS` are read at construction. Runtime's `BuildModeFor` returns the
+  session mode for **every** `TargetDirs` member — `buildMain`'s exactly-one-target guard is the only thing keeping
+  a session to one dir. The `<dir>` grammar lives
   **here only**: Runtime's `prepareBaseConfig` takes no dir (the walk starts at cwd, which `--start-dir`'s chdir has
   set); giving it one re-roots `bufa test` at a nested marker under `test/` and on unix makes `/x` an absolute walk
   start.

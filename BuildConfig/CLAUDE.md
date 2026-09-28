@@ -19,9 +19,13 @@ Package guidance. Repo-wide conventions: [CLAUDE.md](../CLAUDE.md).
   - `Unsafe bool` — Build runs the script with the inherited PATH and salts the key with a TTL bucket.
   - `Task Task` (`task`, `Doc/Specs/ScriptArgs.md`) — the dir is a **task**: its script runs on every invocation and
     it publishes nothing (Build owns the flow — `Build/CLAUDE.md`, **Tasks**). A bool-or-list union
-    (`Task.UnmarshalTOML`): `true` ⇒ `Enabled`; a string list ⇒ `Enabled` + `Args`, the **caller's** env vars of
-    those names that Build lets through into an otherwise hermetic safe script (`[]` ≡ `true`); `false` ⇒ the zero
-    value; any other type or a non-string element fails at decode. Folds by **presence** like `unsafe`, the whole
+    (`Task.UnmarshalTOML`): `true` ⇒ `Enabled`; a string list ⇒ `Enabled` + `Args`, the task's positional
+    **argument names** in order — cmd/bufa binds the command-line tokens after the task's dir to them, and Build lets
+    the caller's env var of a name no token bound through into an otherwise hermetic safe script (`[]` ≡ `true`);
+    `false` ⇒ the zero value; any other type or a non-string element fails at decode. The **last** entry alone may
+    start with `*` (`"*rest"`): the decoder sets `Tail` and strips the sigil, so `Args` holds plain names
+    (`Fixed()` = all but the tail, `TailName()` = the tail or `""`); a `*` anywhere else, or on two entries, fails at
+    decode, and a bare `"*"` reaches `checkTaskArgs` as the empty name. Folds by **presence** like `unsafe`, the whole
     value replaced (names never concatenate), so a section's `task = false` switches a root task off. `checkTask()`
     runs in `afterDecode` **after** the platform fold (it needs the folded view) and hard-fails a task with
     `cmd = false` (a task without a script does nothing) or with any publish-side key — `largeOutput`,
@@ -181,9 +185,11 @@ Each binds this package to another; changing either side breaks the other with n
   re-checks a task's shape: it runs the script unconditionally (no `IsScriptOptional` branch can be taken) and skips
   publish without consulting `Filters.Bld`/`Deps.Export`, on the strength of `checkTask` having rejected a
   `cmd = false` or publish-side-keyed task at decode; a task admitted past it would silently drop those settings.
-  Build's `safeInheritedEnvFor` likewise lets `Task.Args` through **unchecked**: `bufaSetEnvVars` here must name
-  every var Build's clean env sets after inheritance (`cleanSystemPath` + `setPlatformEnv`) — a var added there
-  without a line here is a silent clobber of a let-through.
+  Build's `safeInheritedEnvFor` likewise lets `Task.Args` through **unchecked**, and its `BindArgs`/`setArgs` bind a
+  command-line token to any of them **last** in the script env: `bufaSetEnvVars` here must name every var Build's
+  clean env sets after inheritance (`cleanSystemPath` + `setPlatformEnv`) — a var added there without a line here
+  is a silent clobber of a let-through or a bound token. `BindArgs` also trusts the decode shape: `Tail` ⇒ the last
+  of `Args` is the sigil-stripped tail name, already validated like the rest.
 - [Store](../Store/CLAUDE.md) — `Store.ShellDefFileName` (`BUFA.shell`) lies **outside** `IsReservedName`'s
   namespace on purpose: a provider's definition must stage as its own source and publish beside its binary.
   Reserving it would make `srcFiltersOverride` or `cleanLocalName` drop it and every provider publish without its

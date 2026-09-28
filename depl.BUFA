@@ -1,0 +1,15 @@
+task = ["TOOLS"]
+
+Deps.Bld = ["/"]
+
+[windows]
+cmd = '''
+if not defined TOOLS exit 1
+%BUFA_COPY_OR_MOVE% ..\bufa.exe %TOOLS%
+'''
+
+[unix]
+cmd = '''
+set -eu
+$BUFA_COPY_OR_MOVE ../bufa "$TOOLS"
+'''
